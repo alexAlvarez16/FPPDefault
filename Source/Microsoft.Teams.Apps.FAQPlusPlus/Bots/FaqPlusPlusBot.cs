@@ -1686,7 +1686,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 dtTranspose.Columns.Add("metadataname");
                 dtTranspose.Columns.Add("metadatavalue");
 
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "RAYMUNDO.SANTOS@XPERTAL.COM");
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "raymundo.santos@XPERTAL.COM");
                 // TO DO : buscar response, su estatus para evitar el try catch
                 try
                 {
