@@ -1681,7 +1681,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             {
 
                 // Consumo de archivo JSON
-                Profiling perfiles;
+
                 DataTable dtTranspose = new DataTable();
                 dtTranspose.Columns.Add("metadataname");
                 dtTranspose.Columns.Add("metadatavalue");
@@ -1774,11 +1774,10 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     }
                 }
 
-
+                int indice = 0;
                 DataTable dtAnswersType = new DataTable();
                 dtAnswersType.Columns.Add("answerid");
                 dtAnswersType.Columns.Add("type");
-
 
 
                 var queryprofiling = from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
@@ -1840,18 +1839,30 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                              where PD.Field<string>("metadataname").Trim().ToLower() == "division"
                                              select
                                                   PD.Field<string>("metadatavalue")).ToList();
+                if (queryPersonalDivision.Count == 0)
+                {
+                    queryPersonalDivision.Add("");
+                }
 
                 var queryAreapersonal = (from PD in dtTranspose.AsEnumerable()
                                          where PD.Field<string>("metadataname").Trim().ToLower() == "area_personal"
                                          select
                                                   PD.Field<string>("metadatavalue")).ToList();
 
+                if (queryAreapersonal.Count == 0)
+                {
+                    queryAreapersonal.Add("");
+                }
+
                 var queryperfil = (from PD in dtTranspose.AsEnumerable()
                                    where PD.Field<string>("metadataname").Trim().ToLower() == "perfil"
                                    select
                                             PD.Field<string>("metadatavalue")).ToList();
 
-
+                if (queryperfil.Count == 0)
+                {
+                    queryperfil.Add("");
+                }
 
                 //buscamos cual de la respuesta pertenece a la divisino de personal
 
@@ -1861,7 +1872,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                                      where PD.Field<string>("metadataname").ToLower().Trim() == "division"
                                                      && PD.Field<string>("metadatavalue").Trim().ToLower() == queryPersonalDivision[0].ToString().Trim().ToLower()
                                                      select PD
-                    ;
+                        ;
 
                 //buscamos su area de personal 
 
@@ -1998,7 +2009,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
 
 
-                int indice = 0;
+                indice = 0;
                 if (respuestafinal.Count > 0)
                 {
                     for (int i = 0; i < queryResultTemp.Answers.Count; i++)
@@ -2013,11 +2024,13 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
                 else
                 {
+
                     queryResultTemp.Answers[indice].Id = -1;
                 }
 
 
-                if (queryResult.Answers.First().Id != -1)
+
+                if (queryResultTemp.Answers[indice].Id != -1)
                 {
                     //var answerData = queryResult.Answers.First();
                     var answerData = queryResultTemp.Answers[indice];
