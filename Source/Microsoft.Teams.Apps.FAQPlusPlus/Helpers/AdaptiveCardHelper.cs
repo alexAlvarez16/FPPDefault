@@ -37,7 +37,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Helpers
             ITicketsProvider ticketsProvider)
         {
             var askAnExpertSubmitTextPayload = ((JObject)message.Value).ToObject<AskAnExpertCardPayload>();
-
+            askAnExpertSubmitTextPayload.Title = Microsoft.Teams.Apps.FAQPlusPlus.Properties.Strings.AskAnExpertTitleText;
             // Validate required fields.
             if (string.IsNullOrWhiteSpace(askAnExpertSubmitTextPayload?.Title))
             {
