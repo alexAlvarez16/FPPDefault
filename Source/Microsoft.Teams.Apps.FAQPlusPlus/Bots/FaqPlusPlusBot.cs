@@ -1956,15 +1956,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                             counter = Int32.Parse(queryscore[0].ToString());
                         }
                     }
-
-
-                }
+               }
 
                 foreach (string item in lstqueryarea_personal)
                 {
-
-
-                    // si el score es mayor al maximo , removemos el anterior y añadimos
+                   // si el score es mayor al maximo , removemos el anterior y añadimos
                     queryscore = (from PD in dtAnswersId.AsEnumerable()
                                   where PD.Field<string>("answerid") == item
                                   select PD.Field<string>("score")).ToList();
@@ -1993,9 +1989,9 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                 foreach (string item in chitchat)
                 {
-                    var queryscore4 = (from PD in dtAnswersId.AsEnumerable()
+                    var queryscore4 = from PD in dtAnswersId.AsEnumerable()
                                        where PD.Field<string>("answerid") == item
-                                       select PD);
+                                       select PD;
                     dtAnswersQna.Rows.Add(item, 1, queryscore[0].ToString());
                 }
 
