@@ -13,7 +13,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
     using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
-    using ChoETL;
     using Microsoft.ApplicationInsights.DataContracts;
     using Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models;
     using Microsoft.Bot.Builder;
@@ -34,7 +33,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using ErrorResponseException = Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models.ErrorResponseException;
-    using System.Data;
+
 
 
     /// <summary>
