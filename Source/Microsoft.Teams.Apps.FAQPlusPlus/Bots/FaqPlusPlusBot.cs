@@ -1727,25 +1727,280 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 queryResult = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
                 queryResultTemp = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
 
-                //DataTable dtAnswersId = new DataTable();
-                //dtAnswersId.Columns.Add("answerid");
-                //dtAnswersId.Columns.Add("answer");
-                //dtAnswersId.Columns.Add("score");
+                DataTable dtAnswersId = new DataTable();
+                dtAnswersId.Columns.Add("answerid");
+                dtAnswersId.Columns.Add("answer");
+                dtAnswersId.Columns.Add("score");
 
-                //foreach (QnASearchResult item in queryResult.Answers)
-                //{
-                //    dtAnswersId.Rows.Add(item.Id.ToString().Trim().ToLower(), item.Answer.ToString().Trim().ToLower(), item.Score);
-                //}
+                //Query result respuestas a datatable
+                foreach (QnASearchResult item in queryResult.Answers)
+                {
+                    dtAnswersId.Rows.Add(item.Id.ToString().Trim().ToLower(), item.Answer.ToString().Trim().ToLower(), item.Score);
+                }
+                IEnumerable<DataRow> metadataquery = from myRow in dtTranspose.AsEnumerable()
+                                                     where myRow.Field<string>("metadatavalue").Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") != ""
+                                                     select myRow;
 
-                //IEnumerable<DataRow> metadataquery = from myRow in dtTranspose.AsEnumerable()
-                //                                     where myRow.Field<string>("metadatavalue").Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") != ""
-                //                                     select myRow;
+                dtTranspose = metadataquery.CopyToDataTable<DataRow>();
 
+                DataTable dtAnswersMetadata = new DataTable();
+                dtAnswersMetadata.Columns.Add("answerid");
+                dtAnswersMetadata.Columns.Add("metadataname");
+                dtAnswersMetadata.Columns.Add("metadatavalue");
+                for (int i = 0; i < queryResult.Answers.Count; i++)
+                {
+                    if (queryResult.Answers[i].Metadata.Count > 0)
+                    {
+                        for (int j = 0; j < queryResult.Answers[i].Metadata.Count; j++)
+                        {
+                            if ((queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "division") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "area_personal") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "perfil"))
+                            {
+                                string[] divisionesdepersonal = queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Split(',');
+                                foreach (string item in divisionesdepersonal)
+                                {
+                                    dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"), item.Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u").Replace("\\n", ""));
+                                }
+                            }
+                            else
+                            {
+                                dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"), queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), "empty", "empty");
+                    }
+                }
+
+
+                DataTable dtAnswersType = new DataTable();
+                dtAnswersType.Columns.Add("answerid");
+                dtAnswersType.Columns.Add("type");
+
+
+
+                var queryprofiling = from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                     join myRow2 in dtAnswersMetadata.AsEnumerable()
+                                     on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                     where myRow2.Field<string>("metadataname").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "perfilamiento"
+                                     select
+                                         myRow;
+
+                List<string> profiling = (from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                          join myRow2 in dtAnswersMetadata.AsEnumerable()
+                                          on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                          where myRow2.Field<string>("metadataname").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "perfilamiento"
+                                          select
+                                              myRow.Field<string>("answerid")).ToList();
+
+                List<string> noprofiling = new List<string>();
+                DataTable dtnoprofiling = new DataTable();
+                dtnoprofiling.Columns.Add("answerid");
+
+                List<string> answerlist = (from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                           select
+                                               myRow.Field<string>("answerid")).ToList();
+
+
+                var querychitchat = from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                    join myRow2 in dtAnswersMetadata.AsEnumerable()
+                                    on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                    where myRow2.Field<string>("metadatavalue").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "chitchat"
+                                    select
+                                        myRow;
+
+
+
+                List<string> chitchat = (from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                         join myRow2 in dtAnswersMetadata.AsEnumerable()
+                                         on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                         where myRow2.Field<string>("metadatavalue").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "chitchat"
+                                         select
+                                             myRow.Field<string>("answerid")).ToList();
+
+
+                foreach (string item in answerlist)
+                {
+                    if (!profiling.Contains(item))
+                    {
+                        noprofiling.Add(item);
+                        dtnoprofiling.Rows.Add(item);
+                    }
+                }
+
+                var querynoprofiling = from PD in dtnoprofiling.AsEnumerable()
+                                       select PD;
+
+                IEnumerable<DataRow> contenido = querynoprofiling.Except(querychitchat);
+
+
+                var queryPersonalDivision = (from PD in dtTranspose.AsEnumerable()
+                                             where PD.Field<string>("metadataname").Trim().ToLower() == "division"
+                                             select
+                                                  PD.Field<string>("metadatavalue")).ToList();
+
+                var queryAreapersonal = (from PD in dtTranspose.AsEnumerable()
+                                         where PD.Field<string>("metadataname").Trim().ToLower() == "area_personal"
+                                         select
+                                                  PD.Field<string>("metadatavalue")).ToList();
+
+                var queryperfil = (from PD in dtTranspose.AsEnumerable()
+                                   where PD.Field<string>("metadataname").Trim().ToLower() == "perfil"
+                                   select
+                                            PD.Field<string>("metadatavalue")).ToList();
+
+
+
+                //buscamos cual de la respuesta pertenece a la divisino de personal
+
+                var querypersonaldivisionprofiling = from PD in dtAnswersMetadata.AsEnumerable()
+                                                     join PD2 in queryprofiling
+                                                     on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                                     where PD.Field<string>("metadataname").ToLower().Trim() == "division"
+                                                     && PD.Field<string>("metadatavalue").Trim().ToLower() == queryPersonalDivision[0].ToString().Trim().ToLower()
+                                                     select PD
+                    ;
+
+                //buscamos su area de personal 
+
+                var queryarea_personal = from PD in dtAnswersMetadata.AsEnumerable()
+                                         join PD2 in querypersonaldivisionprofiling
+                                         on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                         where PD.Field<string>("metadataname").ToLower().Trim() == "area_personal"
+                                         && PD.Field<string>("metadataname").ToLower().Trim() != "division"
+                                               && PD.Field<string>("metadatavalue").Trim().ToLower() == queryAreapersonal[0].ToString().Trim().ToLower()
+                                         select PD;
+
+                var lstqueryarea_personal = (from PD in dtAnswersMetadata.AsEnumerable()
+                                             join PD2 in querypersonaldivisionprofiling
+                                             on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                             where PD.Field<string>("metadataname").ToLower().Trim() == "area_personal"
+                                             && PD.Field<string>("metadataname").ToLower().Trim() != "division"
+                                                   && PD.Field<string>("metadatavalue").Trim().ToLower() == queryAreapersonal[0].ToString().Trim().ToLower()
+                                             select PD.Field<string>("answerid")).ToList();
+
+
+
+                var queryperfil2 = from PD in dtAnswersMetadata.AsEnumerable()
+                                   join PD2 in queryarea_personal
+                                   on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                   where PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                                   && PD.Field<string>("metadataname").ToLower().Trim() != "division"
+                                   && PD.Field<string>("metadataname").ToLower().Trim() == "perfil"
+                                         && PD.Field<string>("metadatavalue").Trim().ToLower() == queryperfil[0].ToString().Trim().ToLower()
+                                   select PD;
+
+
+
+                var querycolumna = (from PD in dtAnswersMetadata.AsEnumerable()
+                                    join PD2 in queryperfil2
+                                    on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                    join PD3 in dtTranspose.AsEnumerable()
+                                    on PD.Field<string>("metadataname").Trim().ToLower() equals PD3.Field<string>("metadataname")
+                                    where PD.Field<string>("metadatavalue").Trim().ToLower() == PD3.Field<string>("metadatavalue")
+                                    && PD.Field<string>("metadataname").ToLower().Trim() != "division"
+                                    && PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                                    && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
+                                    select PD.Field<string>("answerid")
+                    ).ToList();
+
+
+
+
+                List<string> AnswersQna = new List<string>();
+                DataTable dtAnswersQna = new DataTable();
+                dtAnswersQna.Columns.Add("answerid");
+                dtAnswersQna.Columns.Add("priority");
+                //dtAnswersQna.Columns.Add("score");
+
+
+
+                // añadimos respuestas
+                // 1 respuesta perfilada
+                // 2 respuesta de contenido
+                // 3 respuesta de chitchat
+
+
+                foreach (string item in querycolumna)
+                {
+                    //var score = (from PD in dtAnswersId.AsEnumerable()
+                    //            where PD.Field<string>("answerid") == item
+                    //            select PD.Field<double>("score"));
+
+                    //dtAnswersQna.Rows.Add(item, 1,score.First());
+                    //lstScore.Clear();
+                    dtAnswersQna.Rows.Add(item, 4);
+                }
+                foreach (string item in lstqueryarea_personal)
+                {
+                    //var score2 = (from PD in dtAnswersId.AsEnumerable()
+                    //             where PD.Field<string>("answerid") == item
+                    //             select PD.Field<double>("score"));
+
+                    //dtAnswersQna.Rows.Add(item, 2, score2.First());
+                    //lstScore.Clear();
+                    dtAnswersQna.Rows.Add(item, 4);
+                }
+
+                List<string> lstcontenido = (from PD in contenido.AsEnumerable()
+                                             select PD.Field<string>("answerid")).ToList();
+
+                foreach (string item in lstcontenido)
+                {
+                    //var score3 = (from PD in dtAnswersId.AsEnumerable()
+                    //             where PD.Field<string>("answerid") == item
+                    //             select PD.Field<double>("score"));
+
+                    //dtAnswersQna.Rows.Add(item, 3, score3.First());
+                    //lstScore.Clear();
+                    dtAnswersQna.Rows.Add(item, 4);
+                }
+
+                foreach (string item in chitchat)
+                {
+                    //var score4 = (from PD in dtAnswersId.AsEnumerable()
+                    //             where PD.Field<string>("answerid") == item
+                    //             select PD.Field<double>("score"));
+
+                    //dtAnswersQna.Rows.Add(item, 4, score4.First());
+                    //lstScore.Clear();
+                    dtAnswersQna.Rows.Add(item, 4);
+                }
+
+
+
+                var respuestafinal = (from PD in dtAnswersQna.AsEnumerable()
+                                      orderby PD.Field<double>("score"), PD.Field<string>("priority")
+                                      select PD.Field<string>("answerid")
+                    ).Take(1).ToList();
+
+
+
+
+                int indice = 0;
+                if (respuestafinal.Count > 0)
+                {
+                    for (int i = 0; i < queryResultTemp.Answers.Count; i++)
+                    {
+                        if (queryResultTemp.Answers[i].Id.ToString() == respuestafinal[0].ToString())
+                        {
+                            indice = i;
+                            break;
+                        }
+
+                    }
+                }
+                else
+                {
+                    queryResultTemp.Answers[indice].Id = -1;
+                }
 
 
                 if (queryResult.Answers.First().Id != -1)
                 {
-                    var answerData = queryResult.Answers.First();
+                    //var answerData = queryResult.Answers.First();
+                    var answerData = queryResultTemp.Answers[indice];
                     AnswerModel answerModel = new AnswerModel();
 
                     if (Validators.IsValidJSON(answerData.Answer))
