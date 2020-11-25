@@ -195,7 +195,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Common.Providers
                 IsTest = isTestKnowledgeBase,
                 Question = question?.Trim(),
                 ScoreThreshold = Convert.ToDouble(this.options.ScoreThreshold),
-                Top = 10,
+                Top = 5,
             };
 
             if (previousQnAId != null && previousUserQuery != null)
