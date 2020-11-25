@@ -1989,9 +1989,9 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                 foreach (string item in chitchat)
                 {
-                    var queryscore4 = from PD in dtAnswersId.AsEnumerable()
-                                       where PD.Field<string>("answerid") == item
-                                       select PD;
+                    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                                  where PD.Field<string>("answerid") == item
+                                  select PD.Field<string>("score")).ToList();
                     dtAnswersQna.Rows.Add(item, 1, queryscore[0].ToString());
                 }
 
