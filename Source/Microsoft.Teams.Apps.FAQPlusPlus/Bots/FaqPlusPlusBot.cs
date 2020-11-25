@@ -1676,8 +1676,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         {
             string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
 
-            try
-            {
+            //try
+            //{
 
             //    // Consumo de archivo JSON
             //        Profiling perfiles;
