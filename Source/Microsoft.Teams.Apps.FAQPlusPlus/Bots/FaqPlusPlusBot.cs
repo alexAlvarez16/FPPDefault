@@ -1676,42 +1676,42 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         {
             string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
 
-            //try
-            //{
+            try
+            {
 
-            //    // Consumo de archivo JSON
-            //        Profiling perfiles;
-            //        DataTable dtTranspose = new DataTable();
-            //        dtTranspose.Columns.Add("metadataname");
-            //        dtTranspose.Columns.Add("metadatavalue");
-                
-            //        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "RAYMUNDO.SANTOS@XPERTAL.COM");
-            //   // TO DO : buscar response, su estatus para evitar el try catch
-            //    try
-            //    {
-            //        using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-            //        using (Stream stream = response.GetResponseStream())
-            //        using (StreamReader reader = new StreamReader(stream))
-            //        {
-            //            var json = reader.ReadToEnd();
-            //            using (var r = ChoJSONReader.LoadText(json))
-            //            {
+                //    // Consumo de archivo JSON
+                //        Profiling perfiles;
+                //        DataTable dtTranspose = new DataTable();
+                //        dtTranspose.Columns.Add("metadataname");
+                //        dtTranspose.Columns.Add("metadatavalue");
 
-            //                foreach (ChoETL.ChoDynamicObject item in r)
-            //                {
-            //                    for (int i = 0; i < item.Values.Count; i++)
-            //                    {
-            //                        dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
-            //                    }
-            //                }
-            //            }
-            //        }
-            //}
-            //catch
-            //{
+                //        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "RAYMUNDO.SANTOS@XPERTAL.COM");
+                //   // TO DO : buscar response, su estatus para evitar el try catch
+                //    try
+                //    {
+                //        using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                //        using (Stream stream = response.GetResponseStream())
+                //        using (StreamReader reader = new StreamReader(stream))
+                //        {
+                //            var json = reader.ReadToEnd();
+                //            using (var r = ChoJSONReader.LoadText(json))
+                //            {
 
-            //}
-            var queryResult = new QnASearchResultList();
+                //                foreach (ChoETL.ChoDynamicObject item in r)
+                //                {
+                //                    for (int i = 0; i < item.Values.Count; i++)
+                //                    {
+                //                        dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
+                //                    }
+                //                }
+                //            }
+                //        }
+                //}
+                //catch
+                //{
+
+                //}
+                var queryResult = new QnASearchResultList();
 
                 // creamos un objeto qna temporal para manipular
                 var queryResultTemp = new QnASearchResultList();
