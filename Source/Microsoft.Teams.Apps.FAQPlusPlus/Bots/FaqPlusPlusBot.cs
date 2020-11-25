@@ -725,7 +725,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             {
                 // User started chat with the bot in personal scope, for the first time.
                 this.logger.LogInformation($"Bot added to 1:1 chat {activity.Conversation.Id}");
-                if(membersAdded[0].Name != null)
+                if (membersAdded[0].Name != null)
                 {
                     var userWelcomeCardAttachment = WelcomeCard.GetCard(string.Format(Strings.WelcomeTextContentUser.Replace("\\t", "\t").Replace("\\n", "\n").Replace("\\r\n", "\r\n"), membersAdded[0].Name));
                     await turnContext.SendActivityAsync(MessageFactory.Attachment(userWelcomeCardAttachment)).ConfigureAwait(false);
@@ -785,7 +785,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 return;
             }
             // Fix text trigger accents
-            string text = message.Text?.ToLower()?.Trim().Replace("á","a").Replace("é","e").Replace("í","i").Replace("ó","o").Replace("ú","u") ?? string.Empty;
+            string text = message.Text?.ToLower()?.Trim().Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") ?? string.Empty;
 
             switch (text)
             {
@@ -1019,13 +1019,13 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 case Constants.AskAnExpert:
                     this.logger.LogInformation("Sending user ask an expert card (from answer)");
                     var askAnExpertPayload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
-                    await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard(askAnExpertPayload,member))).ConfigureAwait(false);
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard(askAnExpertPayload, member))).ConfigureAwait(false);
                     break;
 
                 case Constants.ShareFeedback:
                     this.logger.LogInformation("Sending user share feedback card (from answer)");
                     var shareFeedbackPayload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
-                    await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard(shareFeedbackPayload,member))).ConfigureAwait(false);
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard(shareFeedbackPayload, member))).ConfigureAwait(false);
                     break;
 
                 case AskAnExpertCard.AskAnExpertSubmitText:
@@ -1602,11 +1602,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         {
             string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
             try
-            {              
+            {
                 // Consumo de archivo JSON
 
-                
-     
+
+
 
                 var queryResult = new QnASearchResultList();
 
@@ -1685,7 +1685,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 DataTable dtTranspose = new DataTable();
                 dtTranspose.Columns.Add("metadataname");
                 dtTranspose.Columns.Add("metadatavalue");
-
+                //HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + member.Email);
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "raymundo.santos@XPERTAL.COM");
                 // TO DO : buscar response, su estatus para evitar el try catch
                 try
@@ -1740,9 +1740,10 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 IEnumerable<DataRow> metadataquery = from myRow in dtTranspose.AsEnumerable()
                                                      where myRow.Field<string>("metadatavalue").Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") != ""
                                                      select myRow;
-
-                dtTranspose = metadataquery.CopyToDataTable<DataRow>();
-
+                if (metadataquery.Any())
+                {
+                    dtTranspose = metadataquery.CopyToDataTable<DataRow>();
+                }
                 DataTable dtAnswersMetadata = new DataTable();
                 dtAnswersMetadata.Columns.Add("answerid");
                 dtAnswersMetadata.Columns.Add("metadataname");
@@ -1912,7 +1913,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 DataTable dtAnswersQna = new DataTable();
                 dtAnswersQna.Columns.Add("answerid");
                 dtAnswersQna.Columns.Add("priority");
-                //dtAnswersQna.Columns.Add("score");
+                dtAnswersQna.Columns.Add("score");
 
 
 
@@ -1921,59 +1922,78 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 // 2 respuesta de contenido
                 // 3 respuesta de chitchat
 
-
+                int score = 0;
+                int counter = 0;
+                List<string> queryscore = new List<string>();
                 foreach (string item in querycolumna)
                 {
-                    //var score = (from PD in dtAnswersId.AsEnumerable()
-                    //            where PD.Field<string>("answerid") == item
-                    //            select PD.Field<double>("score"));
 
-                    //dtAnswersQna.Rows.Add(item, 1,score.First());
-                    //lstScore.Clear();
-                    dtAnswersQna.Rows.Add(item, 1);
+
+                    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                                  where PD.Field<string>("answerid") == item
+                                  select PD.Field<string>("score")).ToList();
+                    dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
+
+                    if (counter == 0)
+                    {
+                        counter = Int32.Parse(queryscore[0].ToString());
+                    }
+                    else
+                    {
+                        if (counter < Int32.Parse(queryscore[0].ToString()))
+                        {
+                            counter = Int32.Parse(queryscore[0].ToString());
+                        }
+                    }
+
+
                 }
-                //foreach (string item in lstqueryarea_personal)
-                //{
-                //    //var score2 = (from PD in dtAnswersId.AsEnumerable()
-                //    //             where PD.Field<string>("answerid") == item
-                //    //             select PD.Field<double>("score"));
 
-                //    //dtAnswersQna.Rows.Add(item, 2, score2.First());
-                //    //lstScore.Clear();
-                //    dtAnswersQna.Rows.Add(item, 2);
-                //}
+                foreach (string item in lstqueryarea_personal)
+                {
+
+
+                    // si el score es mayor al maximo , removemos el anterior y añadimos
+                    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                                  where PD.Field<string>("answerid") == item
+                                  select PD.Field<string>("score")).ToList();
+
+                    if (Int32.Parse(queryscore[0].ToString()) > counter)
+                    {
+                        dtAnswersQna.Clear();
+                        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
+                    }
+
+
+
+                }
 
                 List<string> lstcontenido = (from PD in contenido.AsEnumerable()
                                              select PD.Field<string>("answerid")).ToList();
 
                 foreach (string item in lstcontenido)
                 {
-                    //var score3 = (from PD in dtAnswersId.AsEnumerable()
-                    //             where PD.Field<string>("answerid") == item
-                    //             select PD.Field<double>("score"));
+                    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                                  where PD.Field<string>("answerid") == item
+                                  select PD.Field<string>("score")).ToList();
 
-                    //dtAnswersQna.Rows.Add(item, 3, score3.First());
-                    //lstScore.Clear();
-                    dtAnswersQna.Rows.Add(item, 3);
+                    dtAnswersQna.Rows.Add(item, 2, queryscore[0].ToString());
                 }
 
                 foreach (string item in chitchat)
                 {
-                    //var score4 = (from PD in dtAnswersId.AsEnumerable()
-                    //             where PD.Field<string>("answerid") == item
-                    //             select PD.Field<double>("score"));
-
-                    //dtAnswersQna.Rows.Add(item, 4, score4.First());
-                    //lstScore.Clear();
-                    dtAnswersQna.Rows.Add(item, 4);
+                    var queryscore4 = (from PD in dtAnswersId.AsEnumerable()
+                                       where PD.Field<string>("answerid") == item
+                                       select PD);
+                    dtAnswersQna.Rows.Add(item, 1, queryscore[0].ToString());
                 }
 
 
 
                 var respuestafinal = (from PD in dtAnswersQna.AsEnumerable()
-                                      orderby PD.Field<string>("priority")
+                                      orderby PD.Field<string>("priority") descending
                                       select PD.Field<string>("answerid")
-                    ).Take(1).ToList();
+         ).Take(1).ToList();
 
 
 
