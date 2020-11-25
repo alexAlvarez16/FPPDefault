@@ -169,7 +169,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                     },
                 },
             };
-
+            askAnExpertCard.Title = Strings.AskAnExpertTitleText;
             return new Attachment
             {
                 ContentType = AdaptiveCard.ContentType,
