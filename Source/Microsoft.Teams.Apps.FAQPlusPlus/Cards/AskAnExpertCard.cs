@@ -51,7 +51,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             return GetCard(cardPayload, showValidationErrors: false);
         }
 
-        public static Attachment GetCard(ResponseCardPayload payload,Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        public static Attachment GetCard(ResponseCardPayload payload, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
         {
             var cardPayload = new AskAnExpertCardPayload
             {
@@ -60,7 +60,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 KnowledgeBaseAnswer = payload?.KnowledgeBaseAnswer,
             };
 
-            return GetCard(cardPayload, showValidationErrors: false,member);
+            return GetCard(cardPayload, showValidationErrors: false, member);
         }
 
         /// <summary>
@@ -163,7 +163,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                                 DisplayText = Strings.AskAnExpertDisplayText,
                                 Text = AskAnExpertSubmitText,
                                 Title = Strings.AskAnExpertTitleText,
-        },
+                            },
                             UserQuestion = cardPayload?.UserQuestion,
                             KnowledgeBaseAnswer = cardPayload?.KnowledgeBaseAnswer,
                         },
@@ -171,6 +171,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 },
             };
             askAnExpertCard.Title = Strings.AskAnExpertTitleText;
+            cardPayload.Title = Strings.AskAnExpertTitleText;
+
             return new Attachment
             {
                 ContentType = AdaptiveCard.ContentType,
