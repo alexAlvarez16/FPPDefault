@@ -6,11 +6,14 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 {
     using System;
     using System.Collections.Generic;
+    using System.Data;
     using System.Globalization;
+    using System.IO;
     using System.Linq;
     using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
+    using ChoETL;
     using Microsoft.ApplicationInsights.DataContracts;
     using Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models;
     using Microsoft.Bot.Builder;
@@ -31,6 +34,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using ErrorResponseException = Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models.ErrorResponseException;
+    using System.Data;
+
 
     /// <summary>
     /// Class that handles the teams activity of Faq Plus bot and messaging extension.
@@ -195,6 +200,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             try
             {
                 var message = turnContext?.Activity;
+                var member = await TeamsInfo.GetMemberAsync(turnContext, turnContext.Activity.From.Id, cancellationToken);
                 this.logger.LogInformation($"from: {message.From?.Id}, conversation: {message.Conversation.Id}, replyToId: {message.ReplyToId}");
                 await this.SendTypingIndicatorAsync(turnContext).ConfigureAwait(false);
 
@@ -204,6 +210,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                         await this.OnMessageActivityInPersonalChatAsync(
                             message,
                             turnContext,
+                            member,
                             cancellationToken).ConfigureAwait(false);
                         break;
 
@@ -718,9 +725,18 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             {
                 // User started chat with the bot in personal scope, for the first time.
                 this.logger.LogInformation($"Bot added to 1:1 chat {activity.Conversation.Id}");
-                var welcomeText = await this.configurationProvider.GetSavedEntityDetailAsync(ConfigurationEntityTypes.WelcomeMessageText).ConfigureAwait(false);
-                var userWelcomeCardAttachment = WelcomeCard.GetCard(welcomeText);
-                await turnContext.SendActivityAsync(MessageFactory.Attachment(userWelcomeCardAttachment)).ConfigureAwait(false);
+                if(membersAdded[0].Name != null)
+                {
+                    var userWelcomeCardAttachment = WelcomeCard.GetCard(string.Format(Strings.WelcomeTextContentUser.Replace("\\t", "\t").Replace("\\n", "\n").Replace("\\r\n", "\r\n"), membersAdded[0].Name));
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(userWelcomeCardAttachment)).ConfigureAwait(false);
+                }
+                else
+                {
+                    var userWelcomeCardAttachment = WelcomeCard.GetCard(Strings.WelcomeTextContent.Replace("\\t", "\t").Replace("\\n", "\n").Replace("\\r\n", "\r\n"));
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(userWelcomeCardAttachment)).ConfigureAwait(false);
+                }
+
+
             }
         }
 
@@ -759,27 +775,28 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         private async Task OnMessageActivityInPersonalChatAsync(
             IMessageActivity message,
             ITurnContext<IMessageActivity> turnContext,
+            Microsoft.Bot.Schema.Teams.TeamsChannelAccount member,
             CancellationToken cancellationToken)
         {
             if (!string.IsNullOrEmpty(message.ReplyToId) && (message.Value != null) && ((JObject)message.Value).HasValues)
             {
                 this.logger.LogInformation("Card submit in 1:1 chat");
-                await this.OnAdaptiveCardSubmitInPersonalChatAsync(message, turnContext, cancellationToken).ConfigureAwait(false);
+                await this.OnAdaptiveCardSubmitInPersonalChatAsync(message, turnContext, member, cancellationToken).ConfigureAwait(false);
                 return;
             }
-
-            string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
+            // Fix text trigger accents
+            string text = message.Text?.ToLower()?.Trim().Replace("á","a").Replace("é","e").Replace("í","i").Replace("ó","o").Replace("ú","u") ?? string.Empty;
 
             switch (text)
             {
                 case Constants.AskAnExpert:
                     this.logger.LogInformation("Sending user ask an expert card");
-                    await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard())).ConfigureAwait(false);
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard(member))).ConfigureAwait(false);
                     break;
 
                 case Constants.ShareFeedback:
                     this.logger.LogInformation("Sending user feedback card");
-                    await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard())).ConfigureAwait(false);
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard(member))).ConfigureAwait(false);
                     break;
 
                 case Constants.TakeATour:
@@ -790,7 +807,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                 default:
                     this.logger.LogInformation("Sending input to QnAMaker");
-                    await this.GetQuestionAnswerReplyAsync(turnContext, message).ConfigureAwait(false);
+                    await this.GetQuestionAnswerReplyAsync(turnContext, message, member).ConfigureAwait(false);
                     break;
             }
         }
@@ -908,8 +925,19 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     newTicket = await AdaptiveCardHelper.AskAnExpertSubmitText(message, turnContext, cancellationToken, this.ticketsProvider).ConfigureAwait(false);
                     if (newTicket != null)
                     {
+                        // RAAG - 10/11/2020  - Se agrega nombre de usuario asignado a la cadena, ademas de dos constantes en el repositorio NotificationCardContentUser y AssignedTicketUserNotificationUser
+                        string notificationContentUser = string.Empty;
+                        if (newTicket.RequesterGivenName != null)
+                        {
+                            notificationContentUser = string.Format(Strings.NotificationCardContentCustom, newTicket?.RequesterGivenName);
+                        }
+                        else
+                        {
+                            notificationContentUser = Strings.NotificationCardContent;
+                        }
+
                         smeTeamCard = new SmeTicketCard(newTicket).ToAttachment(message?.LocalTimestamp);
-                        userCard = new UserNotificationCard(newTicket).ToAttachment(Strings.NotificationCardContent, message?.LocalTimestamp);
+                        userCard = new UserNotificationCard(newTicket).ToAttachment(notificationContentUser, message?.LocalTimestamp);
                     }
 
                     break;
@@ -919,7 +947,18 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     smeTeamCard = await AdaptiveCardHelper.ShareFeedbackSubmitText(message, turnContext, cancellationToken).ConfigureAwait(false);
                     if (smeTeamCard != null)
                     {
-                        await turnContext.SendActivityAsync(MessageFactory.Text(Strings.ThankYouTextContent)).ConfigureAwait(false);
+                        string txtThankYouTextContentUser = string.Empty;
+                        if (newTicket.RequesterGivenName != null)
+                        {
+                            txtThankYouTextContentUser = string.Format(Strings.ThankYouTextContentUser, newTicket?.RequesterGivenName);
+                        }
+                        else
+                        {
+                            txtThankYouTextContentUser = Strings.ThankYouTextContent;
+                        }
+
+                        //await turnContext.SendActivityAsync(MessageFactory.Text(Strings.ThankYouTextContent)).ConfigureAwait(false);
+                        await turnContext.SendActivityAsync(MessageFactory.Text(txtThankYouTextContentUser)).ConfigureAwait(false);
                     }
 
                     break;
@@ -963,6 +1002,113 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             }
         }
 
+
+
+        private async Task OnAdaptiveCardSubmitInPersonalChatAsync(
+                  IMessageActivity message,
+                  ITurnContext<IMessageActivity> turnContext,
+                  Microsoft.Bot.Schema.Teams.TeamsChannelAccount member,
+                  CancellationToken cancellationToken)
+        {
+            Attachment smeTeamCard = null;      // Notification to SME team
+            Attachment userCard = null;         // Acknowledgement to the user
+            TicketEntity newTicket = null;      // New ticket
+
+            switch (message?.Text)
+            {
+                case Constants.AskAnExpert:
+                    this.logger.LogInformation("Sending user ask an expert card (from answer)");
+                    var askAnExpertPayload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard(askAnExpertPayload,member))).ConfigureAwait(false);
+                    break;
+
+                case Constants.ShareFeedback:
+                    this.logger.LogInformation("Sending user share feedback card (from answer)");
+                    var shareFeedbackPayload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard(shareFeedbackPayload,member))).ConfigureAwait(false);
+                    break;
+
+                case AskAnExpertCard.AskAnExpertSubmitText:
+                    this.logger.LogInformation("Received question for expert");
+                    newTicket = await AdaptiveCardHelper.AskAnExpertSubmitText(message, turnContext, cancellationToken, this.ticketsProvider).ConfigureAwait(false);
+                    if (newTicket != null)
+                    {
+                        // RAAG - 10/11/2020  - Se agrega nombre de usuario asignado a la cadena, ademas de dos constantes en el repositorio NotificationCardContentUser y AssignedTicketUserNotificationUser
+                        string notificationContentUser = string.Empty;
+                        if (newTicket.RequesterGivenName != null)
+                        {
+                            notificationContentUser = string.Format(Strings.NotificationCardContentCustom, newTicket?.RequesterGivenName);
+                        }
+                        else
+                        {
+                            notificationContentUser = Strings.NotificationCardContent;
+                        }
+
+                        smeTeamCard = new SmeTicketCard(newTicket).ToAttachment(message?.LocalTimestamp);
+                        userCard = new UserNotificationCard(newTicket).ToAttachment(notificationContentUser, message?.LocalTimestamp);
+                    }
+
+                    break;
+
+                case ShareFeedbackCard.ShareFeedbackSubmitText:
+                    this.logger.LogInformation("Received app feedback");
+                    smeTeamCard = await AdaptiveCardHelper.ShareFeedbackSubmitText(message, turnContext, cancellationToken).ConfigureAwait(false);
+                    if (smeTeamCard != null)
+                    {
+                        string txtThankYouTextContentUser = string.Empty;
+                        if (member.GivenName != null)
+                        {
+                            txtThankYouTextContentUser = string.Format(Strings.ThankYouTextContentUser, member.GivenName);
+                        }
+                        else
+                        {
+                            txtThankYouTextContentUser = Strings.ThankYouTextContent;
+                        }
+
+                        //await turnContext.SendActivityAsync(MessageFactory.Text(Strings.ThankYouTextContent)).ConfigureAwait(false);
+                        await turnContext.SendActivityAsync(MessageFactory.Text(txtThankYouTextContentUser)).ConfigureAwait(false);
+                    }
+
+                    break;
+
+                default:
+                    var payload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
+
+                    if (payload.IsPrompt)
+                    {
+                        this.logger.LogInformation("Sending input to QnAMaker for prompt");
+                        await this.GetQuestionAnswerReplyAsync(turnContext, message).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        this.logger.LogWarning($"Unexpected text in submit payload: {message.Text}");
+                    }
+
+                    break;
+            }
+
+            string expertTeamId = await this.configurationProvider.GetSavedEntityDetailAsync(ConfigurationEntityTypes.TeamId).ConfigureAwait(false);
+
+            // Send message to SME team.
+            if (smeTeamCard != null)
+            {
+                var resourceResponse = await this.SendCardToTeamAsync(turnContext, smeTeamCard, expertTeamId, cancellationToken).ConfigureAwait(false);
+
+                // If a ticket was created, update the ticket with the conversation info.
+                if (newTicket != null)
+                {
+                    newTicket.SmeCardActivityId = resourceResponse.ActivityId;
+                    newTicket.SmeThreadConversationId = resourceResponse.Id;
+                    await this.ticketsProvider.UpsertTicketAsync(newTicket).ConfigureAwait(false);
+                }
+            }
+
+            // Send acknowledgment to the user
+            if (userCard != null)
+            {
+                await turnContext.SendActivityAsync(MessageFactory.Attachment(userCard), cancellationToken).ConfigureAwait(false);
+            }
+        }
         /// <summary>
         /// Handle adaptive card submit in channel.
         /// Updates the ticket status based on the user submission.
@@ -1039,22 +1185,56 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             {
                 case ChangeTicketStatusPayload.ReopenAction:
                     smeNotification = string.Format(CultureInfo.InvariantCulture, Strings.SMEOpenedStatus, message.From.Name);
+                    string txtReopenedTicketUserNotification = string.Empty;
+                    if (ticket.RequesterGivenName != null)
+                    {
+                        txtReopenedTicketUserNotification = string.Format(Strings.ReopenedTicketUserNotificationUser, ticket?.RequesterGivenName);
+                    }
+                    else
+                    {
+                        txtReopenedTicketUserNotification = Strings.ReopenedTicketUserNotification;
+                    }
 
-                    userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(Strings.ReopenedTicketUserNotification, message.LocalTimestamp));
-                    userNotification.Summary = Strings.ReopenedTicketUserNotification;
+
+                    userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(txtReopenedTicketUserNotification, message.LocalTimestamp));
+                    // userNotification.Summary = Strings.ReopenedTicketUserNotification;
+                    userNotification.Summary = txtReopenedTicketUserNotification;
+
                     break;
 
                 case ChangeTicketStatusPayload.CloseAction:
                     smeNotification = string.Format(CultureInfo.InvariantCulture, Strings.SMEClosedStatus, ticket.LastModifiedByName);
 
-                    userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(Strings.ClosedTicketUserNotification, message.LocalTimestamp));
-                    userNotification.Summary = Strings.ClosedTicketUserNotification;
+                    string txtClosedTicketUserNotification = string.Empty;
+                    if (ticket.RequesterGivenName != null)
+                    {
+                        txtClosedTicketUserNotification = string.Format(Strings.ClosedTicketUserNotificationUser, ticket?.RequesterGivenName);
+                    }
+                    else
+                    {
+                        txtClosedTicketUserNotification = Strings.ClosedTicketUserNotification;
+                    }
+
+                    userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(txtClosedTicketUserNotification, message.LocalTimestamp));
+                    //userNotification.Summary = Strings.ClosedTicketUserNotification;
+                    userNotification.Summary = txtClosedTicketUserNotification;
                     break;
 
                 case ChangeTicketStatusPayload.AssignToSelfAction:
                     smeNotification = string.Format(CultureInfo.InvariantCulture, Strings.SMEAssignedStatus, ticket.AssignedToName);
 
-                    userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(Strings.AssignedTicketUserNotification, message.LocalTimestamp));
+                    // RAAG - 10/11/2020  - Se agrega nombre de experto asignado a la cadena
+                    string assignedTicketNotificationUser = string.Empty;
+                    if (ticket.RequesterGivenName != null)
+                    {
+                        assignedTicketNotificationUser = string.Format(Strings.AssignedTicketUserNotificationCustom, ticket?.RequesterGivenName);
+                    }
+                    else
+                    {
+                        assignedTicketNotificationUser = Strings.AssignedTicketUserNotification;
+                    }
+
+                    userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(assignedTicketNotificationUser, message.LocalTimestamp));
                     userNotification.Summary = Strings.AssignedTicketUserNotification;
                     break;
             }
@@ -1409,6 +1589,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             }
         }
 
+
         /// <summary>
         /// Get the reply to a question asked by end user.
         /// </summary>
@@ -1420,10 +1601,121 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             IMessageActivity message)
         {
             string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
+            try
+            {              
+                // Consumo de archivo JSON
+
+                
+     
+
+                var queryResult = new QnASearchResultList();
+
+
+                ResponseCardPayload payload = new ResponseCardPayload();
+
+                if (!string.IsNullOrEmpty(message.ReplyToId) && (message.Value != null))
+                {
+                    payload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
+                }
+                queryResult = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
+                if (queryResult.Answers.First().Id != -1)
+                {
+                    var answerData = queryResult.Answers.First();
+                    AnswerModel answerModel = new AnswerModel();
+                    if (Validators.IsValidJSON(answerData.Answer))
+                    {
+                        answerModel = JsonConvert.DeserializeObject<AnswerModel>(answerData.Answer);
+                    }
+
+                    if (!string.IsNullOrEmpty(answerModel?.Title) || !string.IsNullOrEmpty(answerModel?.Subtitle) || !string.IsNullOrEmpty(answerModel?.ImageUrl) || !string.IsNullOrEmpty(answerModel?.RedirectionUrl))
+                    {
+                        await turnContext.SendActivityAsync(MessageFactory.Attachment(MessagingExtensionQnaCard.GetEndUserRichCard(text, answerData))).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await turnContext.SendActivityAsync(MessageFactory.Attachment(ResponseCard.GetCard(answerData, text, this.appBaseUri, payload))).ConfigureAwait(false);
+
+                    }
+                }
+                else
+                {
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(UnrecognizedInputCard.GetCard(text))).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Check if knowledge base is empty and has not published yet when end user is asking a question to bot.
+                if (((ErrorResponseException)ex).Response.StatusCode == HttpStatusCode.BadRequest)
+                {
+                    var knowledgeBaseId = await this.configurationProvider.GetSavedEntityDetailAsync(Constants.KnowledgeBaseEntityId).ConfigureAwait(false);
+                    var hasPublished = await this.qnaServiceProvider.GetInitialPublishedStatusAsync(knowledgeBaseId).ConfigureAwait(false);
+
+                    // Check if knowledge base has not published yet.
+                    if (!hasPublished)
+                    {
+                        this.logger.LogError(ex, "Error while fetching the qna pair: knowledge base may be empty or it has not published yet.");
+                        await turnContext.SendActivityAsync(MessageFactory.Attachment(UnrecognizedInputCard.GetCard(text))).ConfigureAwait(false);
+                        return;
+                    }
+                }
+
+                // Throw the error at calling place, if there is any generic exception which is not caught.
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Get the reply to a question asked by end user.
+        /// </summary>
+        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
+        /// <param name="message">Text message.</param>
+        /// <returns>A task that represents the work queued to execute.</returns>
+        private async Task GetQuestionAnswerReplyAsync(
+            ITurnContext<IMessageActivity> turnContext,
+            IMessageActivity message,
+            Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        {
+            string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
 
             try
             {
-                var queryResult = new QnASearchResultList();
+
+                // Consumo de archivo JSON
+                    Profiling perfiles;
+                    DataTable dtTranspose = new DataTable();
+                    dtTranspose.Columns.Add("metadataname");
+                    dtTranspose.Columns.Add("metadatavalue");
+                
+                    HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "RAYMUNDO.SANTOS@XPERTAL.COM");
+               // TO DO : buscar response, su estatus para evitar el try catch
+                try
+                {
+                    using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                    using (Stream stream = response.GetResponseStream())
+                    using (StreamReader reader = new StreamReader(stream))
+                    {
+                        var json = reader.ReadToEnd();
+                        using (var r = ChoJSONReader.LoadText(json))
+                        {
+
+                            foreach (ChoETL.ChoDynamicObject item in r)
+                            {
+                                for (int i = 0; i < item.Values.Count; i++)
+                                {
+                                    dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
+                                }
+                            }
+                        }
+                    }
+            }
+            catch
+            {
+
+            }
+            var queryResult = new QnASearchResultList();
+
+                // creamos un objeto qna temporal para manipular
+                var queryResultTemp = new QnASearchResultList();
 
                 ResponseCardPayload payload = new ResponseCardPayload();
 
@@ -1433,6 +1725,23 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
 
                 queryResult = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
+                queryResultTemp = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
+                
+                DataTable dtAnswersId = new DataTable();
+                dtAnswersId.Columns.Add("answerid");
+                dtAnswersId.Columns.Add("answer");
+                dtAnswersId.Columns.Add("score");
+
+                foreach (QnASearchResult item in queryResult.Answers)
+                {
+                    dtAnswersId.Rows.Add(item.Id.ToString().Trim().ToLower(), item.Answer.ToString().Trim().ToLower(), item.Score);
+                }
+
+                IEnumerable<DataRow> metadataquery = from myRow in dtTranspose.AsEnumerable()
+                                                     where myRow.Field<string>("metadatavalue").Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") != ""
+                                                     select myRow;
+
+
 
                 if (queryResult.Answers.First().Id != -1)
                 {
@@ -1455,7 +1764,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
                 else
                 {
-                    await turnContext.SendActivityAsync(MessageFactory.Attachment(UnrecognizedInputCard.GetCard(text))).ConfigureAwait(false);
+                    await turnContext.SendActivityAsync(MessageFactory.Attachment(UnrecognizedInputCard.GetCard(text, member))).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)

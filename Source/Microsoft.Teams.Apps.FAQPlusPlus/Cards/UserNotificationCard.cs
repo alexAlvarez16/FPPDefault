@@ -41,7 +41,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 {
                     new AdaptiveTextBlock
                     {
-                        Text = message,
+                        Text = message.Replace("\\t", "\t").Replace("\\n", "\n").Replace("\\r\n", "\r\n"),
                         Wrap = true,
                     },
                     new AdaptiveFactSet

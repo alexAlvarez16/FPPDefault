@@ -29,6 +29,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             return GetCard(new AskAnExpertCardPayload(), showValidationErrors: false);
         }
 
+        public static Attachment GetCard(Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        {
+            return GetCard(new AskAnExpertCardPayload(), showValidationErrors: false, member);
+        }
+
         /// <summary>
         /// This method will construct the card for ask an expert, when invoked from the response card.
         /// </summary>
@@ -44,6 +49,18 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             };
 
             return GetCard(cardPayload, showValidationErrors: false);
+        }
+
+        public static Attachment GetCard(ResponseCardPayload payload,Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        {
+            var cardPayload = new AskAnExpertCardPayload
+            {
+                Description = payload.UserQuestion,     // Pre-populate the description with the user's question.
+                UserQuestion = payload.UserQuestion,
+                KnowledgeBaseAnswer = payload?.KnowledgeBaseAnswer,
+            };
+
+            return GetCard(cardPayload, showValidationErrors: false,member);
         }
 
         /// <summary>
@@ -84,18 +101,18 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                     {
                         Columns = new List<AdaptiveColumn>
                         {
-                            new AdaptiveColumn
-                            {
-                                Width = AdaptiveColumnWidth.Auto,
-                                Items = new List<AdaptiveElement>
-                                {
-                                    new AdaptiveTextBlock
-                                    {
-                                        Text = Strings.TitleRequiredText,
-                                        Wrap = true,
-                                    },
-                                },
-                            },
+                            //new AdaptiveColumn
+                            //{
+                            //    Width = AdaptiveColumnWidth.Auto,
+                            //    Items = new List<AdaptiveElement>
+                            //    {
+                            //        new AdaptiveTextBlock
+                            //        {
+                            //            Text = Strings.TitleRequiredText,
+                            //            Wrap = true,
+                            //        },
+                            //    },
+                            //},
                             new AdaptiveColumn
                             {
                                 Items = new List<AdaptiveElement>
@@ -111,13 +128,102 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                             },
                         },
                     },
+                    //new AdaptiveTextInput
+                    //{
+                    //    Id = nameof(AskAnExpertCardPayload.Title),
+                    //    Placeholder = Strings.ShowCardTitleText,
+                    //    IsMultiline = false,
+                    //    Spacing = AdaptiveSpacing.Small,
+                    //    Value = cardPayload?.Title,
+                    //},
+                    new AdaptiveTextBlock
+                    {
+                        Text = Strings.DescriptionText,
+                        Wrap = true,
+                    },
                     new AdaptiveTextInput
                     {
-                        Id = nameof(AskAnExpertCardPayload.Title),
-                        Placeholder = Strings.ShowCardTitleText,
-                        IsMultiline = false,
+                        Id = nameof(AskAnExpertCardPayload.Description),
+                        Placeholder = Strings.AskAnExpertPlaceholderText,
+                        IsMultiline = true,
                         Spacing = AdaptiveSpacing.Small,
-                        Value = cardPayload?.Title,
+                        Value = cardPayload?.Description,
+                    },
+                },
+                Actions = new List<AdaptiveAction>
+                {
+                    new AdaptiveSubmitAction
+                    {
+                        Title = Strings.AskAnExpertButtonText,
+                        Data = new AskAnExpertCardPayload
+                        {
+                            MsTeams = new CardAction
+                            {
+                                Type = ActionTypes.MessageBack,
+                                DisplayText = Strings.AskAnExpertDisplayText,
+                                Text = AskAnExpertSubmitText,
+                            },
+                            UserQuestion = cardPayload?.UserQuestion,
+                            KnowledgeBaseAnswer = cardPayload?.KnowledgeBaseAnswer,
+                        },
+                    },
+                },
+            };
+
+            return new Attachment
+            {
+                ContentType = AdaptiveCard.ContentType,
+                Content = askAnExpertCard,
+            };
+        }
+
+
+        private static Attachment GetCard(AskAnExpertCardPayload cardPayload, bool showValidationErrors, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        {
+            string txtAskAnExpertSubheaderText = string.Empty;
+            if (member.GivenName != null)
+            {
+                txtAskAnExpertSubheaderText = string.Format(Strings.AskAnExpertSubheaderTextUser, member.GivenName);
+            }
+            else
+            {
+                txtAskAnExpertSubheaderText = Strings.AskAnExpertSubheaderText;
+            }
+
+            AdaptiveCard askAnExpertCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 0))
+            {
+                Body = new List<AdaptiveElement>
+                {
+                    new AdaptiveTextBlock
+                    {
+                        Weight = AdaptiveTextWeight.Bolder,
+                        Text = Strings.AskAnExpertTitleText,
+                        Size = AdaptiveTextSize.Large,
+                        Wrap = true,
+                    },
+                    new AdaptiveTextBlock
+                    {
+                        Text =  txtAskAnExpertSubheaderText.Replace("\\t", "\t").Replace("\\n", "\n").Replace("\\r\n", "\r\n"),
+                        Wrap = true,
+                    },
+                    new AdaptiveColumnSet
+                    {
+                        Columns = new List<AdaptiveColumn>
+                        {
+                            new AdaptiveColumn
+                            {
+                                Items = new List<AdaptiveElement>
+                                {
+                                    new AdaptiveTextBlock
+                                    {
+                                        Text = (showValidationErrors && string.IsNullOrWhiteSpace(cardPayload?.Title)) ? Strings.MandatoryTitleFieldText : string.Empty,
+                                        Color = AdaptiveTextColor.Attention,
+                                        HorizontalAlignment = AdaptiveHorizontalAlignment.Right,
+                                        Wrap = true,
+                                    },
+                                },
+                            },
+                        },
                     },
                     new AdaptiveTextBlock
                     {

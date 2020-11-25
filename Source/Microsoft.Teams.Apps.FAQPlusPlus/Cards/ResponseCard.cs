@@ -28,17 +28,64 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
         /// <returns>The response card to append to a message as an attachment.</returns>
         public static Attachment GetCard(QnASearchResult response, string userQuestion, string appBaseUri, ResponseCardPayload payload)
         {
-            AdaptiveCard responseCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 2))
+            // Check if metadata has chitchat value
+            // if it is true it wont render the action buttons
+            // else it will render the action buttons
+            bool chitchatValidation = false;
+            string chitchatText;
+            if (response.Metadata.Count > 0)
             {
-                Body = BuildResponseCardBody(response, userQuestion, response.Answer, appBaseUri, payload),
-                Actions = BuildListOfActions(userQuestion, response.Answer),
-            };
+                for (int i = 0; i < response.Metadata.Count; i++)
+                {
+                     chitchatText = response.Metadata[i].Value.ToLower()?.Trim() ?? string.Empty;
+                    if (chitchatText == "chitchat")
+                     {
+                        chitchatValidation = true;
+                     }
+                }
+                if (chitchatValidation)
+                {
+                    AdaptiveCard responseCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 2))
+                    {
+                        Body = BuildResponseCardBody(response, userQuestion, response.Answer, appBaseUri, payload),
+                    };
 
-            return new Attachment
+                    return new Attachment
+                    {
+                        ContentType = AdaptiveCard.ContentType,
+                        Content = responseCard,
+                    };
+                }
+                else
+                {
+                    AdaptiveCard responseCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 2))
+                    {
+                        Body = BuildResponseCardBody(response, userQuestion, response.Answer, appBaseUri, payload),
+                        Actions = BuildListOfActions(userQuestion, response.Answer),
+                    };
+
+                    return new Attachment
+                    {
+                        ContentType = AdaptiveCard.ContentType,
+                        Content = responseCard,
+                    };
+                }
+            }
+            else
             {
-                ContentType = AdaptiveCard.ContentType,
-                Content = responseCard,
-            };
+
+                AdaptiveCard responseCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 2))
+                {
+                    Body = BuildResponseCardBody(response, userQuestion, response.Answer, appBaseUri, payload),
+                    Actions = BuildListOfActions(userQuestion, response.Answer),
+                };
+
+                return new Attachment
+                {
+                    ContentType = AdaptiveCard.ContentType,
+                    Content = responseCard,
+                };
+            }
         }
 
         /// <summary>

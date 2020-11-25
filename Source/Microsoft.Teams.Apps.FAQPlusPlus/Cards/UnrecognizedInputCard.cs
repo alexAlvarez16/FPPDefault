@@ -58,5 +58,53 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 Content = unrecognizedInputCard,
             };
         }
+
+        public static Attachment GetCard(string userQuestion, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        {
+            string txtCustomMessage = string.Empty;
+            if (member.GivenName != null)
+            {
+                txtCustomMessage = string.Format(Strings.CustomMessageUser, member.GivenName);
+            }
+            else
+            {
+                txtCustomMessage = Strings.CustomMessage;
+            }
+
+            AdaptiveCard unrecognizedInputCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 0))
+            {
+                Body = new List<AdaptiveElement>
+                {
+                    new AdaptiveTextBlock
+                    {
+                        Text = txtCustomMessage,
+                        Wrap = true,
+                    },
+                },
+                Actions = new List<AdaptiveAction>
+                {
+                    new AdaptiveSubmitAction
+                    {
+                        Title = Strings.AskAnExpertButtonText,
+                        Data = new ResponseCardPayload
+                        {
+                            MsTeams = new CardAction
+                            {
+                                Type = ActionTypes.MessageBack,
+                                DisplayText = Strings.AskAnExpertDisplayText,
+                                Text = Constants.AskAnExpert,
+                            },
+                            UserQuestion = userQuestion,
+                        },
+                    },
+                },
+            };
+
+            return new Attachment
+            {
+                ContentType = AdaptiveCard.ContentType,
+                Content = unrecognizedInputCard,
+            };
+        }
     }
 }
