@@ -434,7 +434,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Properties {
         }
         
         /// <summary>
-        ///   Busca una cadena traducida similar a Algo salió mal. Por favor, inténtelo de nuevo más tarde..
+        ///   Busca una cadena traducida similar a ¡Ups! Estoy teniendo algunos problemas técnicos, si quieres ayudarme un poco repórtame a la línea de TI en la extensión 1111 o levanta un ticket en el portal de autoregistro, para poder ayudarte nuevamente lo más pronto posible..
         /// </summary>
         public static string ErrorMessage {
             get {

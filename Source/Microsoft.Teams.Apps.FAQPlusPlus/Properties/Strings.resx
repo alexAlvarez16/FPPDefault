@@ -595,7 +595,7 @@ Te estaré mandando notificaciones, aquí sigo por si me necesitas.</value>
     <comment>Se utiliza en formato de cadena de fecha para la adaptive card. {0} es para la fecha y {1} es para la hora.</comment>
   </data>
   <data name="ErrorMessage" xml:space="preserve">
-    <value>Algo salió mal. Por favor, inténtelo de nuevo más tarde.</value>
+    <value>¡Ups! Estoy teniendo algunos problemas técnicos, si quieres ayudarme un poco repórtame a la línea de TI en la extensión 1111 o levanta un ticket en el portal de autoregistro, para poder ayudarte nuevamente lo más pronto posible.</value>
     <comment>Mensaje de error para mostrar si hay alguna excepción.</comment>
   </data>
   <data name="EmptyDescriptionErrorText" xml:space="preserve">
