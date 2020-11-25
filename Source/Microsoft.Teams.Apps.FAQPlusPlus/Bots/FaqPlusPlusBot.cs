@@ -1930,18 +1930,18 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                     //dtAnswersQna.Rows.Add(item, 1,score.First());
                     //lstScore.Clear();
-                    dtAnswersQna.Rows.Add(item, 4);
+                    dtAnswersQna.Rows.Add(item, 1);
                 }
-                foreach (string item in lstqueryarea_personal)
-                {
-                    //var score2 = (from PD in dtAnswersId.AsEnumerable()
-                    //             where PD.Field<string>("answerid") == item
-                    //             select PD.Field<double>("score"));
+                //foreach (string item in lstqueryarea_personal)
+                //{
+                //    //var score2 = (from PD in dtAnswersId.AsEnumerable()
+                //    //             where PD.Field<string>("answerid") == item
+                //    //             select PD.Field<double>("score"));
 
-                    //dtAnswersQna.Rows.Add(item, 2, score2.First());
-                    //lstScore.Clear();
-                    dtAnswersQna.Rows.Add(item, 4);
-                }
+                //    //dtAnswersQna.Rows.Add(item, 2, score2.First());
+                //    //lstScore.Clear();
+                //    dtAnswersQna.Rows.Add(item, 2);
+                //}
 
                 List<string> lstcontenido = (from PD in contenido.AsEnumerable()
                                              select PD.Field<string>("answerid")).ToList();
@@ -1954,7 +1954,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                     //dtAnswersQna.Rows.Add(item, 3, score3.First());
                     //lstScore.Clear();
-                    dtAnswersQna.Rows.Add(item, 4);
+                    dtAnswersQna.Rows.Add(item, 3);
                 }
 
                 foreach (string item in chitchat)
@@ -1971,7 +1971,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
 
                 var respuestafinal = (from PD in dtAnswersQna.AsEnumerable()
-                                      orderby PD.Field<double>("score"), PD.Field<string>("priority")
+                                      orderby PD.Field<string>("priority")
                                       select PD.Field<string>("answerid")
                     ).Take(1).ToList();
 
