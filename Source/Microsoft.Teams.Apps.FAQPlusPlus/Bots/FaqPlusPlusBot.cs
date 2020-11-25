@@ -33,7 +33,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using ErrorResponseException = Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models.ErrorResponseException;
-
+    using ChoETL;
 
 
     /// <summary>
