@@ -46,6 +46,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 Description = payload.UserQuestion,     // Pre-populate the description with the user's question.
                 UserQuestion = payload.UserQuestion,
                 KnowledgeBaseAnswer = payload?.KnowledgeBaseAnswer,
+                Title = Strings.AskAnExpertTitleText,
             };
 
             return GetCard(cardPayload, showValidationErrors: false);
@@ -58,6 +59,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 Description = payload.UserQuestion,     // Pre-populate the description with the user's question.
                 UserQuestion = payload.UserQuestion,
                 KnowledgeBaseAnswer = payload?.KnowledgeBaseAnswer,
+                Title = Strings.AskAnExpertTitleText,
             };
 
             return GetCard(cardPayload, showValidationErrors: false, member);
