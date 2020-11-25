@@ -1686,7 +1686,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 dtTranspose.Columns.Add("metadataname");
                 dtTranspose.Columns.Add("metadatavalue");
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + member.Email);
-                //HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "raymundo.santos@XPERTAL.COM");
+                //HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "ASTRID.PARADA@XPERTAL.COM");
                 // TO DO : buscar response, su estatus para evitar el try catch
                 try
                 {
@@ -1874,6 +1874,14 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                                      select PD
                         ;
 
+
+                var querypersonaldivisionprofiling1 = (from PD in dtAnswersMetadata.AsEnumerable()
+                                                       join PD2 in queryprofiling
+                                                       on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                                       where PD.Field<string>("metadataname").ToLower().Trim() == "division"
+                                                       && PD.Field<string>("metadatavalue").Trim().ToLower() == queryPersonalDivision[0].ToString().Trim().ToLower()
+                                                       select PD.Field<string>("answerid")).ToList();
+
                 //buscamos su area de personal 
 
                 var queryarea_personal = from PD in dtAnswersMetadata.AsEnumerable()
@@ -1933,8 +1941,9 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 // 2 respuesta de contenido
                 // 3 respuesta de chitchat
 
-                int score = 0;
-                int counter = 0;
+                double score = 0;
+                double counter = 0;
+                bool bit = false;
                 List<string> queryscore = new List<string>();
                 foreach (string item in querycolumna)
                 {
@@ -1947,27 +1956,52 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                     if (counter == 0)
                     {
-                        counter = Int32.Parse(queryscore[0].ToString());
+                        counter = double.Parse(queryscore[0].ToString());
                     }
                     else
                     {
-                        if (counter < Int32.Parse(queryscore[0].ToString()))
+                        if (counter < double.Parse(queryscore[0].ToString()))
                         {
-                            counter = Int32.Parse(queryscore[0].ToString());
+                            counter = double.Parse(queryscore[0].ToString());
                         }
                     }
-               }
+                }
 
                 foreach (string item in lstqueryarea_personal)
                 {
-                   // si el score es mayor al maximo , removemos el anterior y añadimos
+                    // si el score es mayor al maximo , removemos el anterior y añadimos
                     queryscore = (from PD in dtAnswersId.AsEnumerable()
                                   where PD.Field<string>("answerid") == item
                                   select PD.Field<string>("score")).ToList();
 
-                    if (Int32.Parse(queryscore[0].ToString()) > counter)
+                    if (double.Parse(queryscore[0].ToString()) > counter)
                     {
-                        dtAnswersQna.Clear();
+                        if (bit == false)
+                        {
+                            dtAnswersQna.Clear();
+                            bit = true;
+                        }
+                        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
+                    }
+
+
+
+                }
+                bit = false;
+                foreach (string item in querypersonaldivisionprofiling1)
+                {
+                    // si el score es mayor al maximo , removemos el anterior y añadimos
+                    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                                  where PD.Field<string>("answerid") == item
+                                  select PD.Field<string>("score")).ToList();
+
+                    if (double.Parse(queryscore[0].ToString()) > counter)
+                    {
+                        if (bit == false)
+                        {
+                            dtAnswersQna.Clear();
+                            bit = true;
+                        }
                         dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
                     }
 
