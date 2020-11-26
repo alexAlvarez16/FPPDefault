@@ -1754,7 +1754,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     {
                         for (int j = 0; j < queryResult.Answers[i].Metadata.Count; j++)
                         {
-                            if ((queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "division") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "area_personal") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "perfil"))
+                            if ((queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "division") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "area_personal") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "perfil") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "ubicacion"))
                             {
                                 string[] divisionesdepersonal = queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Split(',');
                                 foreach (string item in divisionesdepersonal)
