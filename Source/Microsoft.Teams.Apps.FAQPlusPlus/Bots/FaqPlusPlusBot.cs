@@ -1957,7 +1957,10 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
 
                 var querycolumnaubicacion = (from PD in querycolumna2
+                                             join PD2 in dtAnswersMetadata.AsEnumerable()
+                                             on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
                                              where PD.Field<string>("metadataname") == "ubicacion"
+                                             && PD.Field<string>("metadatavalue") == PD2.Field<string>("metadatavalue")
                                              select PD.Field<string>("answerid")).ToList();
 
 
