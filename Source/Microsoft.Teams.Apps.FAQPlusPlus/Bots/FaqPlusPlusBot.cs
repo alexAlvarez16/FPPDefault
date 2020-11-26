@@ -1685,9 +1685,9 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 DataTable dtTranspose = new DataTable();
                 dtTranspose.Columns.Add("metadataname");
                 dtTranspose.Columns.Add("metadatavalue");
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + member.Email);
-                //HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + "ASTRID.PARADA@XPERTAL.COM");
-                // TO DO : buscar response, su estatus para evitar el try catch
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + member.Email.ToString().ToLower().Trim());
+
+                //// TO DO : buscar response, su estatus para evitar el try catch
                 try
                 {
                     using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
@@ -1714,8 +1714,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
                 var queryResult = new QnASearchResultList();
 
-                // creamos un objeto qna temporal para manipular
-                var queryResultTemp = new QnASearchResultList();
+                //// creamos un objeto qna temporal para manipular
+                //var queryResultTemp = new QnASearchResultList();
 
                 ResponseCardPayload payload = new ResponseCardPayload();
 
@@ -1725,7 +1725,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
 
                 queryResult = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
-                queryResultTemp = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
+                //queryResultTemp = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
 
                 DataTable dtAnswersId = new DataTable();
                 dtAnswersId.Columns.Add("answerid");
@@ -1942,7 +1942,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 // 3 respuesta de chitchat
 
                 double score = 0;
-                double counter = 0;
+                //double counter = 0;
                 bool bit = false;
                 List<string> queryscore = new List<string>();
                 foreach (string item in querycolumna)
@@ -1954,60 +1954,60 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                   select PD.Field<string>("score")).ToList();
                     dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
 
-                    if (counter == 0)
-                    {
-                        counter = double.Parse(queryscore[0].ToString());
-                    }
-                    else
-                    {
-                        if (counter < double.Parse(queryscore[0].ToString()))
-                        {
-                            counter = double.Parse(queryscore[0].ToString());
-                        }
-                    }
+                    //if (counter == 0)
+                    //{
+                    //    counter = double.Parse(queryscore[0].ToString());
+                    //}
+                    //else
+                    //{
+                    //    if (counter < double.Parse(queryscore[0].ToString()))
+                    //    {
+                    //        counter = double.Parse(queryscore[0].ToString());
+                    //    }
+                    //}
                 }
 
-                foreach (string item in lstqueryarea_personal)
-                {
-                    // si el score es mayor al maximo , removemos el anterior y añadimos
-                    queryscore = (from PD in dtAnswersId.AsEnumerable()
-                                  where PD.Field<string>("answerid") == item
-                                  select PD.Field<string>("score")).ToList();
+                //foreach (string item in lstqueryarea_personal)
+                //{
+                //    // si el score es mayor al maximo , removemos el anterior y añadimos
+                //    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                //                  where PD.Field<string>("answerid") == item
+                //                  select PD.Field<string>("score")).ToList();
 
-                    if (double.Parse(queryscore[0].ToString()) > counter)
-                    {
-                        if (bit == false)
-                        {
-                            dtAnswersQna.Clear();
-                            bit = true;
-                        }
-                        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
-                    }
-
-
-
-                }
-                bit = false;
-                foreach (string item in querypersonaldivisionprofiling1)
-                {
-                    // si el score es mayor al maximo , removemos el anterior y añadimos
-                    queryscore = (from PD in dtAnswersId.AsEnumerable()
-                                  where PD.Field<string>("answerid") == item
-                                  select PD.Field<string>("score")).ToList();
-
-                    if (double.Parse(queryscore[0].ToString()) > counter)
-                    {
-                        if (bit == false)
-                        {
-                            dtAnswersQna.Clear();
-                            bit = true;
-                        }
-                        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
-                    }
+                //    if (double.Parse(queryscore[0].ToString()) > counter)
+                //    {
+                //        if (bit == false)
+                //        {
+                //            dtAnswersQna.Clear();
+                //            bit = true;
+                //        }
+                //        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
+                //    }
 
 
 
-                }
+                //}
+                //bit = false;
+                //foreach (string item in querypersonaldivisionprofiling1)
+                //{
+                //    // si el score es mayor al maximo , removemos el anterior y añadimos
+                //    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                //                  where PD.Field<string>("answerid") == item
+                //                  select PD.Field<string>("score")).ToList();
+
+                //    if (double.Parse(queryscore[0].ToString()) > counter)
+                //    {
+                //        if (bit == false)
+                //        {
+                //            dtAnswersQna.Clear();
+                //            bit = true;
+                //        }
+                //        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
+                //    }
+
+
+
+                //}
 
                 List<string> lstcontenido = (from PD in contenido.AsEnumerable()
                                              select PD.Field<string>("answerid")).ToList();
@@ -2042,9 +2042,9 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 indice = 0;
                 if (respuestafinal.Count > 0)
                 {
-                    for (int i = 0; i < queryResultTemp.Answers.Count; i++)
+                    for (int i = 0; i < queryResult.Answers.Count; i++)
                     {
-                        if (queryResultTemp.Answers[i].Id.ToString() == respuestafinal[0].ToString())
+                        if (queryResult.Answers[i].Id.ToString() == respuestafinal[0].ToString())
                         {
                             indice = i;
                             break;
@@ -2055,15 +2055,15 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 else
                 {
 
-                    queryResultTemp.Answers[indice].Id = -1;
+                    queryResult.Answers[indice].Id = -1;
                 }
 
 
 
-                if (queryResultTemp.Answers[indice].Id != -1)
+                if (queryResult.Answers[indice].Id != -1)
                 {
                     //var answerData = queryResult.Answers.First();
-                    var answerData = queryResultTemp.Answers[indice];
+                    var answerData = queryResult.Answers[indice];
                     AnswerModel answerModel = new AnswerModel();
 
                     if (Validators.IsValidJSON(answerData.Answer))
