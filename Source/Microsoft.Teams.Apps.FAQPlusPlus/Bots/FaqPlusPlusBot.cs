@@ -1671,9 +1671,9 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         /// <param name="message">Text message.</param>
         /// <returns>A task that represents the work queued to execute.</returns>
         private async Task GetQuestionAnswerReplyAsync(
-            ITurnContext<IMessageActivity> turnContext,
-            IMessageActivity message,
-            Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+          ITurnContext<IMessageActivity> turnContext,
+          IMessageActivity message,
+          Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
         {
             string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
 
@@ -1702,7 +1702,18 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                             {
                                 for (int i = 0; i < item.Values.Count; i++)
                                 {
-                                    dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
+                                    double number3 = 0;
+
+                                    bool canConvert = double.TryParse(item.ValuesArray[i].ToString().ToLower().Trim(), out number3);
+                                    if (canConvert)
+                                    {
+                                        dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim().Replace(",", "."));
+                                    }
+                                    else
+                                    {
+                                        dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
+                                    }
+
                                 }
                             }
                         }
@@ -1714,8 +1725,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
                 var queryResult = new QnASearchResultList();
 
-                //// creamos un objeto qna temporal para manipular
-                //var queryResultTemp = new QnASearchResultList();
 
                 ResponseCardPayload payload = new ResponseCardPayload();
 
@@ -1725,7 +1734,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
 
                 queryResult = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
-                //queryResultTemp = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
 
                 DataTable dtAnswersId = new DataTable();
                 dtAnswersId.Columns.Add("answerid");
@@ -1864,6 +1872,16 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     queryperfil.Add("");
                 }
 
+                var queryubicacion = (from PD in dtTranspose.AsEnumerable()
+                                      where PD.Field<string>("metadataname").Trim().ToLower() == "ubicacion"
+                                      select
+                                               PD.Field<string>("metadatavalue")).ToList();
+
+                if (queryubicacion.Count == 0)
+                {
+                    queryubicacion.Add("");
+                }
+
                 //buscamos cual de la respuesta pertenece a la divisino de personal
 
                 var querypersonaldivisionprofiling = from PD in dtAnswersMetadata.AsEnumerable()
@@ -1925,6 +1943,22 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                     select PD.Field<string>("answerid")
                     ).ToList();
 
+                var querycolumna2 = (from PD in dtAnswersMetadata.AsEnumerable()
+                                     join PD2 in queryperfil2
+                                     on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                     join PD3 in dtTranspose.AsEnumerable()
+                                     on PD.Field<string>("metadataname").Trim().ToLower() equals PD3.Field<string>("metadataname")
+                                     where PD.Field<string>("metadatavalue").Trim().ToLower() == PD3.Field<string>("metadatavalue")
+                                     && PD.Field<string>("metadataname").ToLower().Trim() != "division"
+                                     && PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                                     && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
+                                     select PD
+      );
+
+
+                var querycolumnaubicacion = (from PD in querycolumna2
+                                             where PD.Field<string>("metadataname") == "ubicacion"
+                                             select PD.Field<string>("answerid")).ToList();
 
 
 
@@ -1937,14 +1971,32 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
 
                 // añadimos respuestas
-                // 1 respuesta perfilada
+                // 5 respuesta perfilada con perfilamiento-division-perfil-columna-ubicacion
+                // 4 respuesta perfilada con perfilamiento-division-perfil-columna
                 // 2 respuesta de contenido
-                // 3 respuesta de chitchat
+                // 1 respuesta de chitchat
 
                 double score = 0;
                 //double counter = 0;
                 bool bit = false;
                 List<string> queryscore = new List<string>();
+
+
+                querycolumna = querycolumna.Except(querycolumnaubicacion).ToList();
+
+
+                foreach (string item in querycolumnaubicacion)
+                {
+
+
+                    queryscore = (from PD in dtAnswersId.AsEnumerable()
+                                  where PD.Field<string>("answerid") == item
+                                  select PD.Field<string>("score")).ToList();
+                    dtAnswersQna.Rows.Add(item, 5, queryscore[0].ToString());
+
+                }
+
+
                 foreach (string item in querycolumna)
                 {
 
@@ -1954,60 +2006,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                   select PD.Field<string>("score")).ToList();
                     dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
 
-                    //if (counter == 0)
-                    //{
-                    //    counter = double.Parse(queryscore[0].ToString());
-                    //}
-                    //else
-                    //{
-                    //    if (counter < double.Parse(queryscore[0].ToString()))
-                    //    {
-                    //        counter = double.Parse(queryscore[0].ToString());
-                    //    }
-                    //}
                 }
-
-                //foreach (string item in lstqueryarea_personal)
-                //{
-                //    // si el score es mayor al maximo , removemos el anterior y añadimos
-                //    queryscore = (from PD in dtAnswersId.AsEnumerable()
-                //                  where PD.Field<string>("answerid") == item
-                //                  select PD.Field<string>("score")).ToList();
-
-                //    if (double.Parse(queryscore[0].ToString()) > counter)
-                //    {
-                //        if (bit == false)
-                //        {
-                //            dtAnswersQna.Clear();
-                //            bit = true;
-                //        }
-                //        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
-                //    }
-
-
-
-                //}
-                //bit = false;
-                //foreach (string item in querypersonaldivisionprofiling1)
-                //{
-                //    // si el score es mayor al maximo , removemos el anterior y añadimos
-                //    queryscore = (from PD in dtAnswersId.AsEnumerable()
-                //                  where PD.Field<string>("answerid") == item
-                //                  select PD.Field<string>("score")).ToList();
-
-                //    if (double.Parse(queryscore[0].ToString()) > counter)
-                //    {
-                //        if (bit == false)
-                //        {
-                //            dtAnswersQna.Clear();
-                //            bit = true;
-                //        }
-                //        dtAnswersQna.Rows.Add(item, 4, queryscore[0].ToString());
-                //    }
-
-
-
-                //}
 
                 List<string> lstcontenido = (from PD in contenido.AsEnumerable()
                                              select PD.Field<string>("answerid")).ToList();
