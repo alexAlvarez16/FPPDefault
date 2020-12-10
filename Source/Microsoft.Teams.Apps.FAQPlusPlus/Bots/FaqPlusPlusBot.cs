@@ -1077,7 +1077,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     if (payload.IsPrompt)
                     {
                         this.logger.LogInformation("Sending input to QnAMaker for prompt");
-                        await this.GetQuestionAnswerReplyAsync(turnContext, message).ConfigureAwait(false);
+                        await this.GetQuestionAnswerReplyAsync(turnContext, message, member).ConfigureAwait(false);
                     }
                     else
                     {
@@ -1948,13 +1948,35 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                     && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
                                     select PD;
 
-                // Filtramos la respuesta por ubicacion
+
+                var lst_columnaFirst = (from PD in dtAnswersMetadata.AsEnumerable()
+                                        join PD2 in query_perfil
+                                        on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                                        join PD3 in dtTranspose.AsEnumerable()
+                                        on PD.Field<string>("metadataname").Trim().ToLower() equals PD3.Field<string>("metadataname")
+                                        where PD.Field<string>("metadatavalue").Trim().ToLower() == PD3.Field<string>("metadatavalue")
+                                        && PD.Field<string>("metadataname").ToLower().Trim() != "division"
+                                        && PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                                        && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
+                                        select PD.Field<string>("answerid")).ToList();
+
+                //// Filtramos la respuesta por ubicacion
+                //var lst_columnaubicacion = (from PD in query_columna
+                //                            join PD2 in dtAnswersMetadata.AsEnumerable()
+                //                            on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
+                //                            where PD.Field<string>("metadataname") == "ubicacion"
+                //                            && PD.Field<string>("metadatavalue") == PD2.Field<string>("metadatavalue")
+                //                            select PD.Field<string>("answerid")).ToList();
+
+                //// Filtramos la respuesta por ubicacion
                 var lst_columnaubicacion = (from PD in query_columna
                                             join PD2 in dtAnswersMetadata.AsEnumerable()
                                             on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
                                             where PD.Field<string>("metadataname") == "ubicacion"
                                             && PD.Field<string>("metadatavalue") == PD2.Field<string>("metadatavalue")
+                                            && PD.Field<string>("answerid") == lst_columnaFirst[0].ToString()
                                             select PD.Field<string>("answerid")).ToList();
+
 
                 DataTable dtAnswersQna = new DataTable();
                 dtAnswersQna.Columns.Add("answerid");
