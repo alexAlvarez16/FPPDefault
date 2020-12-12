@@ -98,9 +98,12 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                             Data = new ChangeTicketStatusPayload { TicketId = this.Ticket.TicketId },
                             Title = Strings.ExpertSubmitButonTitle,
                         },
+
                     },
                 },
+
             });
+
 
             if (!string.IsNullOrEmpty(this.Ticket.KnowledgeBaseAnswer))
             {
@@ -215,6 +218,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                             Title = Strings.CloseActionChoiceTitle,
                             Value = ChangeTicketStatusPayload.CloseAction,
                         },
+
                     };
                 }
                 else
@@ -255,6 +259,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                         Title = Strings.ReopenAssignToMeActionChoiceTitle,
                         Value = ChangeTicketStatusPayload.AssignToSelfAction,
                     },
+                                     new AdaptiveChoice
+                        {
+                            Title = Strings.FeedbackRequestButton,
+                            Value = ChangeTicketStatusPayload.Sharefeedback,
+                        },
                 };
             }
 

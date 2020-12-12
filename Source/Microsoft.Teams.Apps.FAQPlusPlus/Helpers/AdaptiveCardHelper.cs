@@ -55,6 +55,42 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Helpers
             return await CreateTicketAsync(message, askAnExpertSubmitTextPayload, userDetails, ticketsProvider).ConfigureAwait(false);
         }
 
+
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="turnContext"></param>
+        /// <param name="cancellationToken"></param>
+        /// <param name="ticketsProvider"></param>
+        /// <param name="member"></param>
+        /// <param name="user"></param>
+        /// <returns>A <see cref="Task{TResult}"/> representing the result of the asynchronous operation.</returns>
+        public static async Task<TicketEntity> AskAnExpertSubmitText(
+             IMessageActivity message,
+             ITurnContext<IMessageActivity> turnContext,
+             CancellationToken cancellationToken,
+             ITicketsProvider ticketsProvider,
+             Microsoft.Bot.Schema.Teams.TeamsChannelAccount member,
+             UserProfiling user)
+        {
+            var askAnExpertSubmitTextPayload = ((JObject)message.Value).ToObject<AskAnExpertCardPayload>();
+            askAnExpertSubmitTextPayload.Title = Microsoft.Teams.Apps.FAQPlusPlus.Properties.Strings.AskAnExpertTitleText;
+            // Validate required fields.
+            if (string.IsNullOrWhiteSpace(askAnExpertSubmitTextPayload?.Title))
+            {
+                var updateCardActivity = new Activity(ActivityTypes.Message)
+                {
+                    Id = turnContext.Activity.ReplyToId,
+                    Conversation = turnContext.Activity.Conversation,
+                    Attachments = new List<Attachment> { AskAnExpertCard.GetCard(askAnExpertSubmitTextPayload, member, user) },
+                };
+                await turnContext.UpdateActivityAsync(updateCardActivity, cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            var userDetails = await GetUserDetailsInPersonalChatAsync(turnContext, cancellationToken).ConfigureAwait(false);
+            return await CreateTicketAsync(message, askAnExpertSubmitTextPayload, userDetails, ticketsProvider).ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Helps to get the expert submit card.
         /// </summary>
@@ -84,6 +120,42 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Helpers
 
             var teamsUserDetails = await GetUserDetailsInPersonalChatAsync(turnContext, cancellationToken).ConfigureAwait(false);
             return SmeFeedbackCard.GetCard(shareFeedbackSubmitTextPayload, teamsUserDetails);
+        }
+
+
+        /// <summary>
+        /// Helps to get the expert submit card.
+        /// </summary>
+        /// <param name="message">A message in a conversation.</param>
+        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        /// <param name="member"></param>
+        /// <param name="user"></param>
+        /// <returns>A task that represents the work queued to execute.</returns>
+        public static async Task<Attachment> ShareFeedbackSubmitText(
+            IMessageActivity message,
+            ITurnContext<IMessageActivity> turnContext,
+            CancellationToken cancellationToken,
+            Microsoft.Bot.Schema.Teams.TeamsChannelAccount member,
+            UserProfiling user)
+        {
+            var shareFeedbackSubmitTextPayload = ((JObject)message.Value).ToObject<ShareFeedbackCardPayload>();
+
+            // Validate required fields.
+            if (!Enum.TryParse(shareFeedbackSubmitTextPayload?.Rating, out FeedbackRating rating))
+            {
+                var updateCardActivity = new Activity(ActivityTypes.Message)
+                {
+                    Id = turnContext.Activity.ReplyToId,
+                    Conversation = turnContext.Activity.Conversation,
+                    Attachments = new List<Attachment> { ShareFeedbackCard.GetCard(shareFeedbackSubmitTextPayload) },
+                };
+                await turnContext.UpdateActivityAsync(updateCardActivity, cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            var teamsUserDetails = await GetUserDetailsInPersonalChatAsync(turnContext, cancellationToken).ConfigureAwait(false);
+            return SmeFeedbackCard.GetCard(shareFeedbackSubmitTextPayload, teamsUserDetails, member, user);
         }
 
         /// <summary>

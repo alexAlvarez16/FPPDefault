@@ -664,4 +664,12 @@ Mis principales funciones son:\r\n\r\n
     <value>Enviar</value>
     <comment>Titulo(texto) para boton submit de la pantalla de expertos</comment>
   </data>
+  <data name="SharefeedbackNotification" xml:space="preserve">
+    <value>Se envió la solicitud de retroalimentación.</value>
+    <comment>Notificación de tarjeta de experto para solicitud de envio de retroalimentación.</comment>
+  </data>
+  <data name="FeedbackRequestButton" xml:space="preserve">
+    <value>Solicitar retroalimentación</value>
+    <comment>Boton para solicitar retroalimentacion expertos.</comment>
+  </data>
 </root>

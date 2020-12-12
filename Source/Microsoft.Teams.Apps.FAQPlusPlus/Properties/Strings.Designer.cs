@@ -497,6 +497,15 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Properties {
         }
         
         /// <summary>
+        ///   Busca una cadena traducida similar a Solicitar retroalimentación.
+        /// </summary>
+        public static string FeedbackRequestButton {
+            get {
+                return ResourceManager.GetString("FeedbackRequestButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Busca una cadena traducida similar a También puedes compartirme tus comentarios, es decir, como lo estoy haciendo. Estos me ayudan a mejorar. Para dar tu retroalimentación solo tienes que escribir - Comparte retroalimentación - o dar clic en el botón con el mismo nombre cuando aparezca..
         /// </summary>
         public static string FeedbackText1 {
@@ -903,6 +912,15 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Properties {
         public static string ShareFeedbackDisplayText {
             get {
                 return ResourceManager.GetString("ShareFeedbackDisplayText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a Se envió la solicitud de retroalimentación..
+        /// </summary>
+        public static string SharefeedbackNotification {
+            get {
+                return ResourceManager.GetString("SharefeedbackNotification", resourceCulture);
             }
         }
         

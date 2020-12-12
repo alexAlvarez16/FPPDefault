@@ -6,6 +6,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
 {
     using System.Collections.Generic;
     using AdaptiveCards;
+    using Microsoft.ApplicationInsights;
     using Microsoft.Bot.Schema;
     using Microsoft.Teams.Apps.FAQPlusPlus.Common.Models;
     using Microsoft.Teams.Apps.FAQPlusPlus.Properties;
@@ -75,6 +76,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             return GetCard(payload, showValidationErrors: true);
         }
 
+        public static Attachment GetCard(AskAnExpertCardPayload payload, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member, UserProfiling user)
+        {
+            return GetCard(payload, showValidationErrors: true, member, user);
+        }
+
         /// <summary>
         /// This method will construct the card for ask an expert bot menu.
         /// </summary>
@@ -103,18 +109,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                     {
                         Columns = new List<AdaptiveColumn>
                         {
-                            //new AdaptiveColumn
-                            //{
-                            //    Width = AdaptiveColumnWidth.Auto,
-                            //    Items = new List<AdaptiveElement>
-                            //    {
-                            //        new AdaptiveTextBlock
-                            //        {
-                            //            Text = Strings.TitleRequiredText,
-                            //            Wrap = true,
-                            //        },
-                            //    },
-                            //},
                             new AdaptiveColumn
                             {
                                 Items = new List<AdaptiveElement>
@@ -130,14 +124,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                             },
                         },
                     },
-                    //new AdaptiveTextInput
-                    //{
-                    //    Id = nameof(AskAnExpertCardPayload.Title),
-                    //    Placeholder = Strings.ShowCardTitleText,
-                    //    IsMultiline = false,
-                    //    Spacing = AdaptiveSpacing.Small,
-                    //    Value = cardPayload?.Title,
-                    //},
                     new AdaptiveTextBlock
                     {
                         Text = Strings.DescriptionText,
@@ -182,6 +168,87 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             };
         }
 
+
+        private static Attachment GetCard(AskAnExpertCardPayload cardPayload, bool showValidationErrors, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member, UserProfiling user)
+        {
+            AdaptiveCard askAnExpertCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 0))
+            {
+                Body = new List<AdaptiveElement>
+                {
+                    new AdaptiveTextBlock
+                    {
+                        Weight = AdaptiveTextWeight.Bolder,
+                        Text = Strings.AskAnExpertTitleText,
+                        Size = AdaptiveTextSize.Large,
+                        Wrap = true,
+                    },
+                    new AdaptiveTextBlock
+                    {
+                        Text = Strings.AskAnExpertSubheaderText,
+                        Wrap = true,
+                    },
+                    new AdaptiveColumnSet
+                    {
+                        Columns = new List<AdaptiveColumn>
+                        {
+                            new AdaptiveColumn
+                            {
+                                Items = new List<AdaptiveElement>
+                                {
+                                    new AdaptiveTextBlock
+                                    {
+                                        Text = (showValidationErrors && string.IsNullOrWhiteSpace(cardPayload?.Title)) ? Strings.MandatoryTitleFieldText : string.Empty,
+                                        Color = AdaptiveTextColor.Attention,
+                                        HorizontalAlignment = AdaptiveHorizontalAlignment.Right,
+                                        Wrap = true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    new AdaptiveTextBlock
+                    {
+                        Text = Strings.DescriptionText,
+                        Wrap = true,
+                    },
+                    new AdaptiveTextInput
+                    {
+                        Id = nameof(AskAnExpertCardPayload.Description),
+                        Placeholder = Strings.AskAnExpertPlaceholderText,
+                        IsMultiline = true,
+                        Spacing = AdaptiveSpacing.Small,
+                        Value = cardPayload?.Description,
+                    },
+                },
+                Actions = new List<AdaptiveAction>
+                {
+                    new AdaptiveSubmitAction
+                    {
+                        Title = Strings.AskAnExpertButtonText,
+                        Data = new AskAnExpertCardPayload
+                        {
+                            MsTeams = new CardAction
+                            {
+                                Type = ActionTypes.MessageBack,
+                                DisplayText = Strings.AskAnExpertDisplayText,
+                                Text = AskAnExpertSubmitText,
+                                Title = Strings.AskAnExpertTitleText,
+                            },
+                            UserQuestion = cardPayload?.UserQuestion,
+                            KnowledgeBaseAnswer = cardPayload?.KnowledgeBaseAnswer,
+                        },
+                    },
+                },
+            };
+            askAnExpertCard.Title = Strings.AskAnExpertTitleText;
+            cardPayload.Title = Strings.AskAnExpertTitleText;
+
+            return new Attachment
+            {
+                ContentType = AdaptiveCard.ContentType,
+                Content = askAnExpertCard,
+            };
+        }
 
         private static Attachment GetCard(AskAnExpertCardPayload cardPayload, bool showValidationErrors, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
         {

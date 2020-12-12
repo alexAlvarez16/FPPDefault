@@ -27,6 +27,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Common.Models
         public const string AssignToSelfAction = "AssignToSelf";
 
         /// <summary>
+        /// Action that assigns an expert ask to user feedback.
+        /// </summary>
+        public const string Sharefeedback = "sharefeedback";
+
+        /// <summary>
         /// Gets or sets the ticket id.
         /// </summary>
         [JsonProperty("ticketId")]

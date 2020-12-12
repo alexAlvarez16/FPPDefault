@@ -31,11 +31,25 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             return GetCard(new ShareFeedbackCardPayload(), showValidationErrors: false);
         }
 
+
+        public static Attachment GetCard(string givenName)
+        {
+            return GetCard(new ShareFeedbackCardPayload(), showValidationErrors: false, givenName);
+        }
+
+        /// <summary>
+        /// This method will construct the card for share feedback, when invoked from the bot menu.
+        /// </summary>
+        /// <returns>Ask an expert card.</returns>
         public static Attachment GetCard(Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
         {
             return GetCard(new ShareFeedbackCardPayload(), showValidationErrors: false, member);
         }
 
+        /// <summary>
+        /// This method will construct the card for share feedback, when invoked from the bot menu.
+        /// </summary>
+        /// <returns>Ask an expert card.</returns>
         public static Attachment GetCard(ResponseCardPayload payload, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
         {
             var cardPayload = new ShareFeedbackCardPayload
@@ -45,7 +59,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 KnowledgeBaseAnswer = payload?.KnowledgeBaseAnswer,
             };
 
-            return GetCard(cardPayload, showValidationErrors: false,member);
+            return GetCard(cardPayload, showValidationErrors: false, member);
         }
 
 
@@ -83,7 +97,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             }
         }
 
-        public static Attachment GetCard(ShareFeedbackCardPayload payload,Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
+        public static Attachment GetCard(ShareFeedbackCardPayload payload, Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
         {
             if (payload == null)
             {
@@ -91,7 +105,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             }
             else
             {
-                return GetCard(payload, showValidationErrors: true,member);
+                return GetCard(payload, showValidationErrors: true, member);
             }
         }
 
@@ -172,6 +186,127 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                     new AdaptiveTextBlock
                     {
                         Text = Strings.DescriptionText,
+                        Wrap = true,
+                    },
+                    new AdaptiveTextInput
+                    {
+                        Spacing = AdaptiveSpacing.Small,
+                        Id = nameof(ShareFeedbackCardPayload.Description),
+                        Placeholder = !string.IsNullOrWhiteSpace(data.UserQuestion) ? Strings.FeedbackDescriptionPlaceholderText : Strings.AppFeedbackDescriptionPlaceholderText,
+                        IsMultiline = true,
+                        Value = data.Description,
+                    },
+                },
+                Actions = new List<AdaptiveAction>
+                {
+                    new AdaptiveSubmitAction
+                    {
+                        Title = Strings.ShareFeedbackButtonText,
+                        Data = new ShareFeedbackCardPayload
+                        {
+                            MsTeams = new CardAction
+                            {
+                                Type = ActionTypes.MessageBack,
+                                DisplayText = Strings.ShareFeedbackDisplayText,
+                                Text = ShareFeedbackSubmitText,
+                            },
+                            UserQuestion = data.UserQuestion,
+                            KnowledgeBaseAnswer = data.KnowledgeBaseAnswer,
+                        },
+                    },
+                },
+            };
+
+            return new Attachment
+            {
+                ContentType = AdaptiveCard.ContentType,
+                Content = shareFeedbackCard,
+            };
+        }
+
+        private static Attachment GetCard(ShareFeedbackCardPayload data, bool showValidationErrors, string givenName)
+        {
+            string txtFeedbackRatingRequiredUser = string.Empty;
+            if (givenName.Length > 0)
+            {
+                txtFeedbackRatingRequiredUser = string.Format(Strings.FeedbackRatingRequiredUser, givenName);
+            }
+            else
+            {
+                txtFeedbackRatingRequiredUser = !string.IsNullOrWhiteSpace(data.UserQuestion) ? Strings.FeedbackRatingRequired : Strings.ShareAppFeedbackRating;
+            }
+
+            AdaptiveCard shareFeedbackCard = new AdaptiveCard(new AdaptiveSchemaVersion(1, 0))
+            {
+                Body = new List<AdaptiveElement>
+                {
+                    new AdaptiveTextBlock
+                    {
+                        Weight = AdaptiveTextWeight.Bolder,
+                        Text = !string.IsNullOrWhiteSpace(data.UserQuestion) ? Strings.ResultsFeedbackText : Strings.ShareFeedbackTitleText,
+                        Size = AdaptiveTextSize.Large,
+                        Wrap = true,
+                    },
+                    new AdaptiveColumnSet
+                    {
+                        Columns = new List<AdaptiveColumn>
+                        {
+                            new AdaptiveColumn
+                            {
+                                Width = AdaptiveColumnWidth.Auto,
+                                Items = new List<AdaptiveElement>
+                                {
+                                    new AdaptiveTextBlock
+                                    {
+                                        //Text = !string.IsNullOrWhiteSpace(data.UserQuestion) ? Strings.FeedbackRatingRequired : Strings.ShareAppFeedbackRating,
+                                         Text = txtFeedbackRatingRequiredUser,
+                                         Wrap = true,
+                                    },
+                                },
+                            },
+                            new AdaptiveColumn
+                            {
+                                Items = new List<AdaptiveElement>
+                                {
+                                    new AdaptiveTextBlock
+                                    {
+                                        Text = (showValidationErrors && !Enum.TryParse(data.Rating, out FeedbackRating rating)) ? Strings.RatingMandatoryText : string.Empty,
+                                        Color = AdaptiveTextColor.Attention,
+                                        HorizontalAlignment = AdaptiveHorizontalAlignment.Right,
+                                        Wrap = true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    new AdaptiveChoiceSetInput
+                    {
+                        Id = nameof(ShareFeedbackCardPayload.Rating),
+                        IsMultiSelect = false,
+                        Style = AdaptiveChoiceInputStyle.Compact,
+                        Choices = new List<AdaptiveChoice>
+                        {
+                            new AdaptiveChoice
+                            {
+                                Title = Strings.HelpfulRatingText,
+                                Value = nameof(FeedbackRating.Helpful),
+                            },
+                            new AdaptiveChoice
+                            {
+                                Title = Strings.NeedsImprovementRatingText,
+                                Value = nameof(FeedbackRating.NeedsImprovement),
+                            },
+                            new AdaptiveChoice
+                            {
+                                Title = Strings.NotHelpfulRatingText,
+                                Value = nameof(FeedbackRating.NotHelpful),
+                            },
+                        },
+                    },
+                    new AdaptiveTextBlock
+                    {
+                        //Text = Strings.DescriptionText,
+                        Text = Strings.FeedbackRatingDescription,
                         Wrap = true,
                     },
                     new AdaptiveTextInput
@@ -330,5 +465,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 Content = shareFeedbackCard,
             };
         }
+
+
     }
 }

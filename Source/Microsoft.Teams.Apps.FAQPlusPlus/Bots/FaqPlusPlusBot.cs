@@ -4,15 +4,8 @@
 
 namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Data;
-    using System.Globalization;
-    using System.IO;
-    using System.Linq;
-    using System.Net;
-    using System.Threading;
-    using System.Threading.Tasks;
+    using ChoETL;
+    using Microsoft.ApplicationInsights;
     using Microsoft.ApplicationInsights.DataContracts;
     using Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models;
     using Microsoft.Bot.Builder;
@@ -32,9 +25,16 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
     using Microsoft.Teams.Apps.FAQPlusPlus.Properties;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
-    using ErrorResponseException = Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models.ErrorResponseException;
-    using ChoETL;
+    using System;
+    using System.Collections.Generic;
     using System.Data;
+    using System.Globalization;
+    using System.IO;
+    using System.Linq;
+    using System.Net;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using ErrorResponseException = Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models.ErrorResponseException;
 
 
     /// <summary>
@@ -784,30 +784,45 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 await this.OnAdaptiveCardSubmitInPersonalChatAsync(message, turnContext, member, cancellationToken).ConfigureAwait(false);
                 return;
             }
+
             // Fix text trigger accents
             string text = message.Text?.ToLower()?.Trim().Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") ?? string.Empty;
+
+            // Perfilamiento
+            string email = member.Email.ToLower().Trim();
+
+
+            DataTable dtProfiling = this.Profiling(email);
+
+            UserProfiling user = this.ProfilingStructure(email, dtProfiling, (string)JObject.Parse(turnContext.Activity.Entities[0].Properties.Root.ToString()).SelectToken("$.platform"));
+            TelemetryClient telemetry = new TelemetryClient();
 
             switch (text)
             {
                 case Constants.AskAnExpert:
                     this.logger.LogInformation("Sending user ask an expert card");
                     await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard(member))).ConfigureAwait(false);
+                    this.TelemetryTrigger(telemetry, Constants.AskAnExpert, user);
+
                     break;
 
                 case Constants.ShareFeedback:
                     this.logger.LogInformation("Sending user feedback card");
                     await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard(member))).ConfigureAwait(false);
+                    this.TelemetryTrigger(telemetry, Constants.ShareFeedback, user);
+
                     break;
 
                 case Constants.TakeATour:
                     this.logger.LogInformation("Sending user tour card");
                     var userTourCards = TourCarousel.GetUserTourCards(this.appBaseUri);
                     await turnContext.SendActivityAsync(MessageFactory.Carousel(userTourCards)).ConfigureAwait(false);
+                    this.TelemetryTrigger(telemetry, Constants.TakeATour, user);
                     break;
 
                 default:
                     this.logger.LogInformation("Sending input to QnAMaker");
-                    await this.GetQuestionAnswerReplyAsync(turnContext, message, member).ConfigureAwait(false);
+                    await this.GetQuestionAnswerReplyAsync(turnContext, message, member, false, dtProfiling, email, user).ConfigureAwait(false);
                     break;
             }
         }
@@ -829,7 +844,22 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             // Check if the incoming request is from SME for updating the ticket status.
             if (!string.IsNullOrEmpty(message.ReplyToId) && (message.Value != null) && ((JObject)message.Value).HasValues && !string.IsNullOrEmpty(((JObject)message.Value)["ticketId"]?.ToString()))
             {
-                text = ChangeStatus;
+                if (((JObject)message.Value)["Action"].ToString() != null)
+                {
+                    string value = ((JObject)message.Value)["Action"].ToString();
+                    if (value == ChangeTicketStatusPayload.Sharefeedback)
+                    {
+                        text = ChangeTicketStatusPayload.Sharefeedback;
+                    }
+                    else
+                    {
+                        text = ChangeStatus;
+                    }
+                }
+                else
+                {
+                    text = ChangeStatus;
+                }
             }
             else
             {
@@ -849,6 +879,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     case ChangeStatus:
                         this.logger.LogInformation($"Card submit in channel {message.Value?.ToString()}");
                         await this.OnAdaptiveCardSubmitInChannelAsync(message, turnContext, cancellationToken).ConfigureAwait(false);
+                        return;
+
+                    case ChangeTicketStatusPayload.Sharefeedback:
+                        this.logger.LogInformation($"Feedback Card submit in channel {message.Value?.ToString()}");
+                        await this.OnAdaptiveCardSubmitInChannelAsyncShareFeedback(message, turnContext, cancellationToken).ConfigureAwait(false);
                         return;
 
                     case Constants.DeleteCommand:
@@ -957,7 +992,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                             txtThankYouTextContentUser = Strings.ThankYouTextContent;
                         }
 
-                        //await turnContext.SendActivityAsync(MessageFactory.Text(Strings.ThankYouTextContent)).ConfigureAwait(false);
                         await turnContext.SendActivityAsync(MessageFactory.Text(txtThankYouTextContentUser)).ConfigureAwait(false);
                     }
 
@@ -1014,18 +1048,30 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             Attachment userCard = null;         // Acknowledgement to the user
             TicketEntity newTicket = null;      // New ticket
 
+            // Perfilamiento
+            string email = member.Email.ToLower().Trim();
+
+
+            DataTable dtProfiling = this.Profiling(email);
+
+            UserProfiling user = this.ProfilingStructure(email, dtProfiling, (string)JObject.Parse(turnContext.Activity.Entities[0].Properties.Root.ToString()).SelectToken("$.platform"));
+            TelemetryClient telemetry = new TelemetryClient();
+
             switch (message?.Text)
             {
                 case Constants.AskAnExpert:
                     this.logger.LogInformation("Sending user ask an expert card (from answer)");
                     var askAnExpertPayload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
                     await turnContext.SendActivityAsync(MessageFactory.Attachment(AskAnExpertCard.GetCard(askAnExpertPayload, member))).ConfigureAwait(false);
+                    this.TelemetryTrigger(telemetry, Constants.AskAnExpert, user);
                     break;
 
                 case Constants.ShareFeedback:
                     this.logger.LogInformation("Sending user share feedback card (from answer)");
                     var shareFeedbackPayload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
                     await turnContext.SendActivityAsync(MessageFactory.Attachment(ShareFeedbackCard.GetCard(shareFeedbackPayload, member))).ConfigureAwait(false);
+                    this.TelemetryTrigger(telemetry, Constants.ShareFeedback, user);
+
                     break;
 
                 case AskAnExpertCard.AskAnExpertSubmitText:
@@ -1045,6 +1091,49 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                         }
 
                         smeTeamCard = new SmeTicketCard(newTicket).ToAttachment(message?.LocalTimestamp);
+                        if (user.Division.Length > 0)
+                        {
+                            telemetry.TrackTrace("TicketOpen", 0, new Dictionary<string, string>
+                        {
+                            { "IDTicket", newTicket.TicketId.ToString() },
+                            { "Status", newTicket.Status.ToString() },
+                            { "Title", newTicket.Title },
+                            { "Description", newTicket.Description },
+                            { "RequestedUserPrincipalName", newTicket.RequesterUserPrincipalName },
+                            { "AssignedToName", newTicket.AssignedToName ?? "na" },
+                            { "DateAssigned", newTicket.DateAssigned.ToString() ?? "na" },
+                            { "DateClosed", newTicket.DateClosed.ToString() ?? "na" },
+                            { "Reopen", "0" },
+                            { "User", user.Email },
+                            { "Division", user.Division },
+                            { "Profile", user.Profile },
+                            { "PersonalArea", user.PersonalArea },
+                            { "Location", user.Ubication },
+                            { "Platform", user.Platform },
+                        });
+                        }
+                        else
+                        {
+                            telemetry.TrackTrace("TicketOpen", 0, new Dictionary<string, string>
+                        {
+                            { "IDTicket", newTicket.TicketId.ToString() },
+                            { "Status", newTicket.Status.ToString() },
+                            { "Title", newTicket.Title },
+                            { "Description", newTicket.Description },
+                            { "RequestedUserPrincipalName", newTicket.RequesterUserPrincipalName ?? "na" },
+                            { "AssignedToName", newTicket.AssignedToName },
+                            { "DateAssigned", newTicket.DateAssigned.ToString() ?? "na" },
+                            { "DateClosed", newTicket.DateClosed.ToString() ?? "na" },
+                            { "Reopen", "0" },
+                            { "User", user.Email },
+                            { "Division", "na" },
+                            { "Profile", "na" },
+                            { "PersonalArea", "na" },
+                            { "Location", "na" },
+                            { "Platform", user.Platform },
+                        });
+                        }
+
                         userCard = new UserNotificationCard(newTicket).ToAttachment(notificationContentUser, message?.LocalTimestamp);
                     }
 
@@ -1065,7 +1154,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                             txtThankYouTextContentUser = Strings.ThankYouTextContent;
                         }
 
-                        //await turnContext.SendActivityAsync(MessageFactory.Text(Strings.ThankYouTextContent)).ConfigureAwait(false);
                         await turnContext.SendActivityAsync(MessageFactory.Text(txtThankYouTextContentUser)).ConfigureAwait(false);
                     }
 
@@ -1077,7 +1165,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     if (payload.IsPrompt)
                     {
                         this.logger.LogInformation("Sending input to QnAMaker for prompt");
-                        await this.GetQuestionAnswerReplyAsync(turnContext, message, member).ConfigureAwait(false);
+                        await this.GetQuestionAnswerReplyAsync(turnContext, message, member, true, dtProfiling, email, user).ConfigureAwait(false);
                     }
                     else
                     {
@@ -1109,6 +1197,19 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 await turnContext.SendActivityAsync(MessageFactory.Attachment(userCard), cancellationToken).ConfigureAwait(false);
             }
         }
+
+
+
+        /// <summary>
+        /// Handle adaptive card submit in channel.
+        /// Updates the ticket status based on the user submission.
+        /// </summary>
+        /// <param name="message">A message in a conversation.</param>
+        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        /// <returns>A task that represents the work queued to execute.</returns>
+
+
         /// <summary>
         /// Handle adaptive card submit in channel.
         /// Updates the ticket status based on the user submission.
@@ -1124,6 +1225,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         {
             var payload = ((JObject)message.Value).ToObject<ChangeTicketStatusPayload>();
             this.logger.LogInformation($"Received submit: ticketId={payload.TicketId} action={payload.Action}");
+            TelemetryClient telemetry = new TelemetryClient();
 
             // Get the ticket from the data store.
             var ticket = await this.ticketsProvider.GetTicketAsync(payload.TicketId).ConfigureAwait(false);
@@ -1143,11 +1245,38 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     ticket.AssignedToName = null;
                     ticket.AssignedToObjectId = null;
                     ticket.DateClosed = null;
+                    telemetry.TrackTrace("TicketUpdate", 0, new Dictionary<string, string>
+                        {
+                            { "IDTicket", ticket.TicketId.ToString() },
+                            { "Status", ticket.Status.ToString() },
+                            { "Title", ticket.Title },
+                            { "Description", ticket.Description },
+                            { "RequestedUserPrincipalName", ticket.RequesterUserPrincipalName ?? "na" },
+                            { "AssignedToName", ticket.AssignedToName ?? "na" },
+                            { "DateAssigned", ticket.DateAssigned.ToString() ?? "na" },
+                            { "DateClosed", ticket.DateClosed.ToString() ?? "na" },
+                            { "Reopen", "1" },
+                        });
+
                     break;
 
                 case ChangeTicketStatusPayload.CloseAction:
                     ticket.Status = (int)TicketState.Closed;
                     ticket.DateClosed = DateTime.UtcNow;
+
+                    telemetry.TrackTrace("TicketUpdate", 0, new Dictionary<string, string>
+                        {
+                            { "IDTicket", ticket.TicketId.ToString() },
+                            { "Status", ticket.Status.ToString() },
+                            { "Title", ticket.Title },
+                            { "Description", ticket.Description },
+                            { "RequestedUserPrincipalName", ticket.RequesterUserPrincipalName ?? "na" },
+                            { "AssignedToName", ticket.AssignedToName ?? "na" },
+                            { "DateAssigned", ticket.DateAssigned.ToString() ?? "na" },
+                            { "DateClosed", ticket.DateClosed.ToString() ?? "na" },
+                            { "Reopen", "0" },
+                        });
+
                     break;
 
                 case ChangeTicketStatusPayload.AssignToSelfAction:
@@ -1156,6 +1285,20 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     ticket.AssignedToName = message.From.Name;
                     ticket.AssignedToObjectId = message.From.AadObjectId;
                     ticket.DateClosed = null;
+
+                    telemetry.TrackTrace("TicketUpdate", 0, new Dictionary<string, string>
+                        {
+                            { "IDTicket", ticket.TicketId.ToString() },
+                            { "Status", ticket.Status.ToString() },
+                            { "Title", ticket.Title },
+                            { "Description", ticket.Description },
+                            { "RequestedUserPrincipalName", ticket.RequesterUserPrincipalName ?? "na" },
+                            { "AssignedToName", ticket.AssignedToName },
+                            { "DateAssigned", ticket.DateAssigned.ToString() ?? "na" },
+                            { "DateClosed", ticket.DateClosed.ToString() ?? "na" },
+                            { "Reopen", "0" },
+                        });
+
                     break;
 
                 default:
@@ -1194,10 +1337,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     {
                         txtReopenedTicketUserNotification = Strings.ReopenedTicketUserNotification;
                     }
-
-
                     userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(txtReopenedTicketUserNotification, message.LocalTimestamp));
-                    // userNotification.Summary = Strings.ReopenedTicketUserNotification;
                     userNotification.Summary = txtReopenedTicketUserNotification;
 
                     break;
@@ -1216,8 +1356,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     }
 
                     userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(txtClosedTicketUserNotification, message.LocalTimestamp));
-                    //userNotification.Summary = Strings.ClosedTicketUserNotification;
                     userNotification.Summary = txtClosedTicketUserNotification;
+
                     break;
 
                 case ChangeTicketStatusPayload.AssignToSelfAction:
@@ -1237,6 +1377,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     userNotification = MessageFactory.Attachment(new UserNotificationCard(ticket).ToAttachment(assignedTicketNotificationUser, message.LocalTimestamp));
                     userNotification.Summary = Strings.AssignedTicketUserNotification;
                     break;
+
+
             }
 
             if (!string.IsNullOrEmpty(smeNotification))
@@ -1251,6 +1393,57 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 var userResponse = await turnContext.Adapter.SendActivitiesAsync(turnContext, new Activity[] { (Activity)userNotification }, cancellationToken).ConfigureAwait(false);
                 this.logger.LogInformation($"User notified of update to ticket {ticket.TicketId}, activityId = {userResponse.FirstOrDefault()?.Id}");
             }
+        }
+
+
+        /// <summary>
+        /// Handle adaptive card submit in channel.
+        /// Updates the ticket status based on the user submission.
+        /// </summary>
+        /// <param name="message">A message in a conversation.</param>
+        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        /// <returns>A task that represents the work queued to execute.</returns>
+        private async Task OnAdaptiveCardSubmitInChannelAsyncShareFeedback(
+            IMessageActivity message,
+            ITurnContext<IMessageActivity> turnContext,
+            CancellationToken cancellationToken)
+        {
+            var payload = ((JObject)message.Value).ToObject<ChangeTicketStatusPayload>();
+            this.logger.LogInformation($"Received submit: ticketId={payload.TicketId} action={payload.Action}");
+
+
+            // Get the ticket from the data store.
+            var ticket = await this.ticketsProvider.GetTicketAsync(payload.TicketId).ConfigureAwait(false);
+            if (ticket == null)
+            {
+                await turnContext.SendActivityAsync($"Ticket {payload.TicketId} was not found in the data store").ConfigureAwait(false);
+                this.logger.LogInformation($"Ticket {payload.TicketId} was not found in the data store");
+                return;
+            }
+            // Post update to user and SME team thread.
+            string smeNotification = null;
+            IMessageActivity userNotification = null;
+
+
+            smeNotification = string.Format(CultureInfo.InvariantCulture, Strings.SharefeedbackNotification, ticket.LastModifiedByName);
+            userNotification = MessageFactory.Attachment(ShareFeedbackCard.GetCard(ticket.RequesterGivenName));
+
+
+            if (!string.IsNullOrEmpty(smeNotification))
+            {
+                var smeResponse = await turnContext.SendActivityAsync(smeNotification).ConfigureAwait(false);
+                this.logger.LogInformation($"SME team notified of update to ticket {ticket.TicketId}, activityId = {smeResponse.Id}");
+            }
+
+            if (userNotification != null)
+            {
+                userNotification.Conversation = new ConversationAccount { Id = ticket.RequesterConversationId };
+                var userResponse = await turnContext.Adapter.SendActivitiesAsync(turnContext, new Activity[] { (Activity)userNotification }, cancellationToken).ConfigureAwait(false);
+                this.logger.LogInformation($"User notified of update to ticket {ticket.TicketId}, activityId = {userResponse.FirstOrDefault()?.Id}");
+            }
+
+
         }
 
         /// <summary>
@@ -1628,7 +1821,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     else
                     {
                         await turnContext.SendActivityAsync(MessageFactory.Attachment(ResponseCard.GetCard(answerData, text, this.appBaseUri, payload))).ConfigureAwait(false);
-
                     }
                 }
                 else
@@ -1658,67 +1850,214 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             }
         }
 
-        /// <summary>
-        /// Get the reply to a question asked by end user.
-        /// </summary>
-        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
-        /// <param name="message">Text message.</param>
-        /// <returns>A task that represents the work queued to execute.</returns>
-        private async Task GetQuestionAnswerReplyAsync(
-          ITurnContext<IMessageActivity> turnContext,
-          IMessageActivity message,
-          Microsoft.Bot.Schema.Teams.TeamsChannelAccount member)
-        {
-            string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
 
+
+
+        private DataTable Profiling(string email)
+        {
+            // HeadCount
+            DataTable dtProfiling = new DataTable();
+            dtProfiling.Columns.Add("metadataname");
+            dtProfiling.Columns.Add("metadatavalue");
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + email);
+
+            // GET JSON Response from HC
             try
             {
-                // Datatable para almacenar las columnas y valores del HC
-                DataTable dtTranspose = new DataTable();
-                dtTranspose.Columns.Add("metadataname");
-                dtTranspose.Columns.Add("metadatavalue");
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(@"https://foto-worxpace.azurewebsites.net/api/HttpTrigger1?email=" + member.Email.ToString().ToLower().Trim());
-
-                //// Consumo JSON de HC
-                try
+                double number = 0;
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (Stream stream = response.GetResponseStream())
+                using (StreamReader reader = new StreamReader(stream))
                 {
-                    using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                    using (Stream stream = response.GetResponseStream())
-                    using (StreamReader reader = new StreamReader(stream))
+                    var json = reader.ReadToEnd();
+                    using (var r = ChoJSONReader.LoadText(json))
                     {
-                        var json = reader.ReadToEnd();
-                        using (var r = ChoJSONReader.LoadText(json))
+
+                        foreach (ChoETL.ChoDynamicObject item in r)
                         {
-
-                            foreach (ChoETL.ChoDynamicObject item in r)
+                            for (int i = 0; i < item.Values.Count; i++)
                             {
-                                for (int i = 0; i < item.Values.Count; i++)
+                                number = 0;
+
+                                bool canConvert = double.TryParse(item.ValuesArray[i].ToString().ToLower().Trim(), out number);
+                                if (canConvert)
                                 {
-                                    double number = 0;
-
-                                    bool canConvert = double.TryParse(item.ValuesArray[i].ToString().ToLower().Trim(), out number);
-                                    if (canConvert)
-                                    {
-                                        dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim().Replace(",", "."));
-                                    }
-                                    else
-                                    {
-                                        dtTranspose.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
-                                    }
-
+                                    dtProfiling.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim().Replace(",", "."));
+                                }
+                                else
+                                {
+                                    dtProfiling.Rows.Add(item.KeysArray[i].ToString().ToLower().Trim(), item.ValuesArray[i].ToString().ToLower().Trim());
                                 }
                             }
                         }
                     }
                 }
-                catch
+            }
+            catch
+            {
+            }
+
+            IEnumerable<DataRow> metadataquery = from myRow in dtProfiling.AsEnumerable()
+                                                 where myRow.Field<string>("metadatavalue").Trim().ToLower().Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") != string.Empty
+                                                 select myRow;
+            if (metadataquery.Any())
+            {
+                dtProfiling = metadataquery.CopyToDataTable<DataRow>();
+            }
+
+            return dtProfiling;
+        }
+
+        private UserProfiling ProfilingStructure(string email, DataTable dtProfiling, string platform)
+        {
+            UserProfiling user = new UserProfiling();
+            user.Email = email;
+            user.Division = this.ColumnQuery(dtProfiling, "division")[0].ToLower().Trim();
+            user.PersonalArea = this.ColumnQuery(dtProfiling, "area_personal")[0].ToLower().Trim();
+            user.Profile = this.ColumnQuery(dtProfiling, "perfil")[0].ToLower().Trim();
+            user.Ubication = this.ColumnQuery(dtProfiling, "ubicacion")[0].ToLower().Trim();
+            user.Platform = platform;
+            return user;
+        }
+
+        private List<string> ColumnQuery(DataTable dtProfiling, string columna)
+        {
+            var list = (from row in dtProfiling.AsEnumerable()
+                        where row.Field<string>("metadataname").Trim().ToLower() == columna
+                        select
+                             row.Field<string>("metadatavalue")).ToList();
+            if (list.Count == 0)
+            {
+                list.Add(string.Empty);
+            }
+
+            return list;
+        }
+
+        private void TelemetryAnswer(TelemetryClient telemetry, string answerid, string answer, string text, bool submitaction, UserProfiling user)
+        {
+            if (submitaction)
+            {
+                if (user.Division.Length > 0)
                 {
-
+                    telemetry.TrackTrace("QnaAnswer", 0, new Dictionary<string, string> {
+                            { "IDAnswer", answerid },
+                            { "SubmitAnswer", "1" },
+                            { "AnswerText", answer },
+                            { "Platform", user.Platform },
+                            { "Question", text },
+                            { "User", user.Email },
+                            { "Division", user.Division },
+                            { "Profile",user.Profile },
+                            { "PersonalArea", user.PersonalArea },
+                            { "Location", user.Ubication },
+                        });
                 }
+                else
+                {
+                    telemetry.TrackTrace("QnaAnswer", 0, new Dictionary<string, string> {
+                            { "IDAnswer", answerid },
+                            { "SubmitAnswer", "1" },
+                            { "AnswerText",  answer },
+                            { "Platform", user.Platform },
+                            { "Question", text },
+                            { "User", user.Email },
+                            { "Division", "na" },
+                            { "Profile", "na" },
+                            { "PersonalArea", "na" },
+                            { "Location", "na" },
+                        });
+                }
+            }
+            else
+            {
+                if (user.Division.Length > 0)
+                {
+                    telemetry.TrackTrace("QnaAnswer", 0, new Dictionary<string, string> {
+                            { "IDAnswer", answerid },
+                            { "SubmitAnswer", "0" },
+                            { "AnswerText", answer },
+                            { "Platform", user.Platform },
+                            { "Question", text },
+                            { "User", user.Email },
+                            { "Division", user.Division },
+                            { "Profile", user.Profile },
+                            { "PersonalArea", user.PersonalArea },
+                            { "Location", user.Ubication },
+                        });
+                }
+                else
+                {
+                    telemetry.TrackTrace("QnaAnswer", 0, new Dictionary<string, string> {
+                            { "IDAnswer", answerid },
+                            { "SubmitAnswer", "0" },
+                            { "AnswerText",  answer },
+                            { "Platform", user.Platform },
+                            { "Question", text },
+                            { "User", user.Email },
+                            { "Division", "na" },
+                            { "Profile", "na" },
+                            { "PersonalArea", "na" },
+                            { "Location", "na" },
+                        });
+                }
+            }
+        }
 
+        private void TelemetryTrigger(TelemetryClient telemetry, string triggertext, UserProfiling user)
+        {
+            if (user.Division.Length > 0)
+            {
+                telemetry.TrackTrace("Trigger", 0, new Dictionary<string, string> {
+                            { "Trigger", triggertext },
+                            { "User", user.Email },
+                            { "Division", user.Division },
+                            { "Profile", user.Profile },
+                            { "PersonalArea", user.PersonalArea },
+                            { "Location", user.Ubication },
+                            { "Platform", user.Platform },
+                        });
+            }
+            else
+            {
+                telemetry.TrackTrace("Trigger", 0, new Dictionary<string, string> {
+                            { "Trigger", triggertext },
+                            { "User", user.Email },
+                            { "Division", "na" },
+                            { "Profile", "na" },
+                            { "PersonalArea", "na" },
+                            { "Location", "na" },
+                            { "Platform", user.Platform },
+                        });
+            }
+        }
+
+
+        /// <summary>
+        /// Get the reply to a question asked by end user.
+        /// </summary>
+        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
+        /// <param name="message">Text message.</param>
+        /// <param name="member"></param>
+        /// <param name="submitaction"></param>
+        /// <param name="dtTranspose"></param>
+        /// <param name="email"></param>
+        /// <param name="user"></param>
+        /// <returns>A task that represents the work queued to execute.</returns>
+        private async Task GetQuestionAnswerReplyAsync(
+          ITurnContext<IMessageActivity> turnContext,
+          IMessageActivity message,
+          Microsoft.Bot.Schema.Teams.TeamsChannelAccount member,
+          bool submitaction,
+          DataTable dtProfiling,
+          string email,
+          UserProfiling user)
+        {
+            string text = message.Text?.ToLower()?.Trim() ?? string.Empty;
+
+            try
+            {
                 var queryResult = new QnASearchResultList();
-
-
                 ResponseCardPayload payload = new ResponseCardPayload();
 
                 if (!string.IsNullOrEmpty(message.ReplyToId) && (message.Value != null))
@@ -1726,323 +2065,25 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     payload = ((JObject)message.Value).ToObject<ResponseCardPayload>();
                 }
 
-                // TOP n respuestas de qnamaker
+                // TOP n answers from QNAMaker
                 queryResult = await this.qnaServiceProvider.GenerateAnswerAsync(question: text, isTestKnowledgeBase: false, payload.PreviousQuestions?.First().Id.ToString(), payload.PreviousQuestions?.First().Questions.First()).ConfigureAwait(false);
 
-                // Datatable para consultar la pregunta y su puntuacion
-                DataTable dtAnswersId = new DataTable();
-                dtAnswersId.Columns.Add("answerid");
-                dtAnswersId.Columns.Add("answer");
-                dtAnswersId.Columns.Add("score");
+                // Datatable for querying answerns and íts score 
+                DataTable dtAnswersId = this.AnswersId(queryResult);
 
+                // Metadata from answers
+                DataTable dtAnswersMetadata = this.AnswerMetadata(queryResult);
 
-                foreach (QnASearchResult item in queryResult.Answers)
-                {
-                    dtAnswersId.Rows.Add(item.Id.ToString().Trim().ToLower(), item.Answer.ToString().Trim().ToLower(), item.Score);
-                }
-                IEnumerable<DataRow> metadataquery = from myRow in dtTranspose.AsEnumerable()
-                                                     where myRow.Field<string>("metadatavalue").Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") != ""
-                                                     select myRow;
-                if (metadataquery.Any())
-                {
-                    dtTranspose = metadataquery.CopyToDataTable<DataRow>();
-                }
+                // Function with Linq querying
+                string finalAnswer = this.AnswerProfilingQuery(queryResult, dtAnswersId, dtAnswersMetadata, dtProfiling, user);
 
-                // Dattable de metadatos de la pregunta
-                DataTable dtAnswersMetadata = new DataTable();
-                dtAnswersMetadata.Columns.Add("answerid");
-                dtAnswersMetadata.Columns.Add("metadataname");
-                dtAnswersMetadata.Columns.Add("metadatavalue");
-
-                for (int i = 0; i < queryResult.Answers.Count; i++)
-                {
-                    if (queryResult.Answers[i].Metadata.Count > 0)
-                    {
-                        for (int j = 0; j < queryResult.Answers[i].Metadata.Count; j++)
-                        {
-                            if ((queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "division") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "area_personal") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "perfil") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "ubicacion"))
-                            {
-                                string[] divisionesdepersonal = queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Split(',');
-                                foreach (string item in divisionesdepersonal)
-                                {
-                                    dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"), item.Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u").Replace("\\n", ""));
-                                }
-                            }
-                            else
-                            {
-                                dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"), queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), "empty", "empty");
-                    }
-                }
-
-                int indice = 0; // variable que indica el indice de la respuesta
-
-                // Filtro de metadato perfilamiento
-                var query_profiling = from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
-                                      join myRow2 in dtAnswersMetadata.AsEnumerable()
-                                      on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
-                                      where myRow2.Field<string>("metadataname").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "perfilamiento"
-                                      select
-                                          myRow;
-
-                List<string> lst_profiling = (from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
-                                              join myRow2 in dtAnswersMetadata.AsEnumerable()
-                                              on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
-                                              where myRow2.Field<string>("metadataname").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "perfilamiento"
-                                              select
-                                                  myRow.Field<string>("answerid")).ToList();
-
-                // Filtro de  de contenido no perfilado
-                List<string> lst_noprofiling = new List<string>();
-
-                DataTable dtnoprofiling = new DataTable();
-                dtnoprofiling.Columns.Add("answerid");
-
-                List<string> lst_answerlist = (from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
-                                               select
-                                                   myRow.Field<string>("answerid")).ToList();
-
-                // Filtro de chitchat
-                var query_chitchat = from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
-                                     join myRow2 in dtAnswersMetadata.AsEnumerable()
-                                     on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
-                                     where myRow2.Field<string>("metadatavalue").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "chitchat"
-                                     select
-                                         myRow;
-
-
-
-                List<string> lst_chitchat = (from myRow in dtAnswersId.AsEnumerable().DefaultIfEmpty()
-                                             join myRow2 in dtAnswersMetadata.AsEnumerable()
-                                             on myRow.Field<string>("answerId").ToString().Trim().ToLower() equals myRow2.Field<string>("AnswerId").ToString().Trim().ToLower()
-                                             where myRow2.Field<string>("metadatavalue").Replace(" ", "").Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "chitchat"
-                                             select
-                                                 myRow.Field<string>("answerid")).ToList();
-
-
-                foreach (string item in lst_answerlist)
-                {
-                    if (!lst_profiling.Contains(item))
-                    {
-                        lst_noprofiling.Add(item);
-                        dtnoprofiling.Rows.Add(item);
-                    }
-                }
-
-                var query_noprofiling = from PD in dtnoprofiling.AsEnumerable()
-                                        select PD;
-
-                IEnumerable<DataRow> contenido = query_noprofiling.Except(query_chitchat);
-
-                // Consulta de division de personal
-                var lst_PersonalDivision = (from PD in dtTranspose.AsEnumerable()
-                                            where PD.Field<string>("metadataname").Trim().ToLower() == "division"
-                                            select
-                                                 PD.Field<string>("metadatavalue")).ToList();
-                if (lst_PersonalDivision.Count == 0)
-                {
-                    lst_PersonalDivision.Add("");
-                }
-
-
-                // Consulta de area_personal
-                var lst_Areapersonal = (from PD in dtTranspose.AsEnumerable()
-                                        where PD.Field<string>("metadataname").Trim().ToLower() == "area_personal"
-                                        select
-                                                 PD.Field<string>("metadatavalue")).ToList();
-
-                if (lst_Areapersonal.Count == 0)
-                {
-                    lst_Areapersonal.Add("");
-                }
-
-                // Consulta de perfil
-                var lst_perfil = (from PD in dtTranspose.AsEnumerable()
-                                  where PD.Field<string>("metadataname").Trim().ToLower() == "perfil"
-                                  select
-                                           PD.Field<string>("metadatavalue")).ToList();
-
-                if (lst_perfil.Count == 0)
-                {
-                    lst_perfil.Add("");
-                }
-                // Consulta de ubicacion
-                var lst_ubicacion = (from PD in dtTranspose.AsEnumerable()
-                                     where PD.Field<string>("metadataname").Trim().ToLower() == "ubicacion"
-                                     select
-                                              PD.Field<string>("metadatavalue")).ToList();
-
-                if (lst_ubicacion.Count == 0)
-                {
-                    lst_ubicacion.Add("");
-                }
-
-                //Filtramos la respuesta por metadato de division de personal
-                var query_personaldivisionprofiling = from PD in dtAnswersMetadata.AsEnumerable()
-                                                      join PD2 in query_profiling
-                                                      on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                                      where PD.Field<string>("metadataname").ToLower().Trim() == "division"
-                                                      && PD.Field<string>("metadatavalue").Trim().ToLower() == lst_PersonalDivision[0].ToString().Trim().ToLower()
-                                                      select PD;
-
-                var lst_personaldivisionprofiling = (from PD in dtAnswersMetadata.AsEnumerable()
-                                                     join PD2 in query_profiling
-                                                     on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                                     where PD.Field<string>("metadataname").ToLower().Trim() == "division"
-                                                     && PD.Field<string>("metadatavalue").Trim().ToLower() == lst_PersonalDivision[0].ToString().Trim().ToLower()
-                                                     select PD.Field<string>("answerid")).ToList();
-
-                // Filtramos la respuesta por metadato de area de personal
-                var query_area_personal = from PD in dtAnswersMetadata.AsEnumerable()
-                                          join PD2 in query_personaldivisionprofiling
-                                          on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                          where PD.Field<string>("metadataname").ToLower().Trim() == "area_personal"
-                                          && PD.Field<string>("metadataname").ToLower().Trim() != "division"
-                                                && PD.Field<string>("metadatavalue").Trim().ToLower() == lst_Areapersonal[0].ToString().Trim().ToLower()
-                                          select PD;
-
-                var lst_queryarea_personal = (from PD in dtAnswersMetadata.AsEnumerable()
-                                              join PD2 in query_personaldivisionprofiling
-                                              on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                              where PD.Field<string>("metadataname").ToLower().Trim() == "area_personal"
-                                              && PD.Field<string>("metadataname").ToLower().Trim() != "division"
-                                                    && PD.Field<string>("metadatavalue").Trim().ToLower() == lst_Areapersonal[0].ToString().Trim().ToLower()
-                                              select PD.Field<string>("answerid")).ToList();
-
-                // Filtramos la respuesta por metadato de perfil
-                var query_perfil = from PD in dtAnswersMetadata.AsEnumerable()
-                                   join PD2 in query_area_personal
-                                   on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                   where PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
-                                   && PD.Field<string>("metadataname").ToLower().Trim() != "division"
-                                   && PD.Field<string>("metadataname").ToLower().Trim() == "perfil"
-                                         && PD.Field<string>("metadatavalue").Trim().ToLower() == lst_perfil[0].ToString().Trim().ToLower()
-                                   select PD;
-
-                // Filtramos la respuesta por culumna del HC
-                var lst_columna = (from PD in dtAnswersMetadata.AsEnumerable()
-                                   join PD2 in query_perfil
-                                   on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                   join PD3 in dtTranspose.AsEnumerable()
-                                   on PD.Field<string>("metadataname").Trim().ToLower() equals PD3.Field<string>("metadataname")
-                                   where PD.Field<string>("metadatavalue").Trim().ToLower() == PD3.Field<string>("metadatavalue")
-                                   && PD.Field<string>("metadataname").ToLower().Trim() != "division"
-                                   && PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
-                                   && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
-                                   select PD.Field<string>("answerid")
-                    ).ToList();
-
-                var query_columna = from PD in dtAnswersMetadata.AsEnumerable()
-                                    join PD2 in query_perfil
-                                    on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                    join PD3 in dtTranspose.AsEnumerable()
-                                    on PD.Field<string>("metadataname").Trim().ToLower() equals PD3.Field<string>("metadataname")
-                                    where PD.Field<string>("metadatavalue").Trim().ToLower() == PD3.Field<string>("metadatavalue")
-                                    && PD.Field<string>("metadataname").ToLower().Trim() != "division"
-                                    && PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
-                                    && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
-                                    select PD;
-
-
-                var lst_columnaFirst = (from PD in dtAnswersMetadata.AsEnumerable()
-                                        join PD2 in query_perfil
-                                        on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                        join PD3 in dtTranspose.AsEnumerable()
-                                        on PD.Field<string>("metadataname").Trim().ToLower() equals PD3.Field<string>("metadataname")
-                                        where PD.Field<string>("metadatavalue").Trim().ToLower() == PD3.Field<string>("metadatavalue")
-                                        && PD.Field<string>("metadataname").ToLower().Trim() != "division"
-                                        && PD.Field<string>("metadataname").ToLower().Trim() != "area_personal"
-                                        && PD.Field<string>("metadataname").ToLower().Trim() != "perfil"
-                                        select PD.Field<string>("answerid")).ToList();
-
-                //// Filtramos la respuesta por ubicacion
-                //var lst_columnaubicacion = (from PD in query_columna
-                //                            join PD2 in dtAnswersMetadata.AsEnumerable()
-                //                            on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                //                            where PD.Field<string>("metadataname") == "ubicacion"
-                //                            && PD.Field<string>("metadatavalue") == PD2.Field<string>("metadatavalue")
-                //                            select PD.Field<string>("answerid")).ToList();
-
-                //// Filtramos la respuesta por ubicacion
-                var lst_columnaubicacion = (from PD in query_columna
-                                            join PD2 in dtAnswersMetadata.AsEnumerable()
-                                            on PD.Field<string>("answerid") equals PD2.Field<string>("answerid")
-                                            where PD.Field<string>("metadataname") == "ubicacion"
-                                            && PD.Field<string>("metadatavalue") == PD2.Field<string>("metadatavalue")
-                                            && PD.Field<string>("answerid") == lst_columnaFirst[0].ToString()
-                                            select PD.Field<string>("answerid")).ToList();
-
-
-                DataTable dtAnswersQna = new DataTable();
-                dtAnswersQna.Columns.Add("answerid");
-                dtAnswersQna.Columns.Add("priority");
-                dtAnswersQna.Columns.Add("score");
-
-                // añadimos respuestas
-                // 5 respuesta perfilada con perfilamiento-division-perfil-columna-ubicacion
-                // 4 respuesta perfilada con perfilamiento-division-perfil-columna
-                // 2 respuesta de contenido
-                // 1 respuesta de chitchat
-
-                List<string> lst_score = new List<string>();
-                lst_columna = lst_columna.Except(lst_columnaubicacion).ToList();
-
-                foreach (string item in lst_columnaubicacion)
-                {
-                    lst_score = (from PD in dtAnswersId.AsEnumerable()
-                                 where PD.Field<string>("answerid") == item
-                                 select PD.Field<string>("score")).ToList();
-                    dtAnswersQna.Rows.Add(item, 5, lst_score[0].ToString());
-                }
-
-
-                foreach (string item in lst_columna)
-                {
-                    lst_score = (from PD in dtAnswersId.AsEnumerable()
-                                 where PD.Field<string>("answerid") == item
-                                 select PD.Field<string>("score")).ToList();
-                    dtAnswersQna.Rows.Add(item, 4, lst_score[0].ToString());
-
-                }
-
-                List<string> lstcontenido = (from PD in contenido.AsEnumerable()
-                                             select PD.Field<string>("answerid")).ToList();
-
-                foreach (string item in lstcontenido)
-                {
-                    lst_score = (from PD in dtAnswersId.AsEnumerable()
-                                 where PD.Field<string>("answerid") == item
-                                 select PD.Field<string>("score")).ToList();
-
-                    dtAnswersQna.Rows.Add(item, 2, lst_score[0].ToString());
-                }
-
-                foreach (string item in lst_chitchat)
-                {
-                    lst_score = (from PD in dtAnswersId.AsEnumerable()
-                                 where PD.Field<string>("answerid") == item
-                                 select PD.Field<string>("score")).ToList();
-                    dtAnswersQna.Rows.Add(item, 1, lst_score[0].ToString());
-                }
-
-                var respuestafinal = (from PD in dtAnswersQna.AsEnumerable()
-                                      orderby PD.Field<string>("priority") descending
-                                      select PD.Field<string>("answerid")
-                                      ).Take(1).ToList();
-
-
-                // Filtra la respuesta final por prioridad (top 1)
-                indice = 0;
-                if (respuestafinal.Count > 0)
+                // answer index in qnamaker object
+                int indice = 0;
+                if (finalAnswer.Length > 0)
                 {
                     for (int i = 0; i < queryResult.Answers.Count; i++)
                     {
-                        if (queryResult.Answers[i].Id.ToString() == respuestafinal[0].ToString())
+                        if (queryResult.Answers[i].Id.ToString() == finalAnswer)
                         {
                             indice = i;
                             break;
@@ -2051,11 +2092,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 }
                 else
                 {
-                    // No se tiene respuesta
+                    // No answer
                     queryResult.Answers[indice].Id = -1;
                 }
 
-
+                TelemetryClient telemetry = new TelemetryClient();
                 if (queryResult.Answers[indice].Id != -1)
                 {
                     var answerData = queryResult.Answers[indice];
@@ -2073,11 +2114,13 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                     else
                     {
                         await turnContext.SendActivityAsync(MessageFactory.Attachment(ResponseCard.GetCard(answerData, text, this.appBaseUri, payload))).ConfigureAwait(false);
+                        this.TelemetryAnswer(telemetry, answerData.Id.ToString(), answerData.Answer, text, submitaction, user);
                     }
                 }
                 else
                 {
                     await turnContext.SendActivityAsync(MessageFactory.Attachment(UnrecognizedInputCard.GetCard(text, member))).ConfigureAwait(false);
+                    this.TelemetryAnswer(telemetry, "-1", Strings.ErrorMessage, text, submitaction, user);
                 }
             }
             catch (Exception ex)
@@ -2101,5 +2144,267 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                 throw;
             }
         }
+
+        private DataTable AnswerMetadata(QnASearchResultList queryResult)
+        {
+            DataTable dtAnswersMetadata = new DataTable();
+            dtAnswersMetadata.Columns.Add("answerid");
+            dtAnswersMetadata.Columns.Add("metadataname");
+            dtAnswersMetadata.Columns.Add("metadatavalue");
+
+            for (int i = 0; i < queryResult.Answers.Count; i++)
+            {
+                if (queryResult.Answers[i].Metadata.Count > 0)
+                {
+                    for (int j = 0; j < queryResult.Answers[i].Metadata.Count; j++)
+                    {
+                        if ((queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "division") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "area_personal") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "perfil") || (queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower() == "ubicacion"))
+                        {
+                            string[] divisionesdepersonal = queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Split(',');
+                            foreach (string item in divisionesdepersonal)
+                            {
+                                dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower().Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"), item.Trim().ToLower().Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u").Replace("\\n", string.Empty));
+                            }
+                        }
+                        else
+                        {
+                            dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), queryResult.Answers[i].Metadata[j].Name.ToString().Trim().ToLower().Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"), queryResult.Answers[i].Metadata[j].Value.ToString().Trim().ToLower().Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u"));
+                        }
+                    }
+                }
+                else
+                {
+                    dtAnswersMetadata.Rows.Add(queryResult.Answers[i].Id.ToString().Trim().ToLower(), "empty", "empty");
+                }
+            }
+
+            return dtAnswersMetadata;
+        }
+
+        private DataTable AnswersId(QnASearchResultList queryResult)
+        {
+
+            DataTable dtAnswersId = new DataTable();
+            dtAnswersId.Columns.Add("answerid");
+            dtAnswersId.Columns.Add("answer");
+            dtAnswersId.Columns.Add("score");
+
+            foreach (QnASearchResult item in queryResult.Answers)
+            {
+                dtAnswersId.Rows.Add(item.Id.ToString().Trim().ToLower(), item.Answer.ToString().Trim().ToLower(), item.Score);
+            }
+
+            return dtAnswersId;
+        }
+
+
+        private string AnswerProfilingQuery(QnASearchResultList queryResult, DataTable dtAnswersId, DataTable dtAnswersMetadata, DataTable dtTranspose, UserProfiling user)
+        {
+            //// Query profiling tag (perfilamiento)
+            var query_profiling = from row in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                  join row2 in dtAnswersMetadata.AsEnumerable()
+                                  on row.Field<string>("answerId").ToString().Trim().ToLower() equals row2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                  where row2.Field<string>("metadataname").Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "perfilamiento"
+                                  select
+                                     row;
+            // String List of  profiling tag query (perfilamiento)
+            List<string> lst_profiling = (from row in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                          join row2 in dtAnswersMetadata.AsEnumerable()
+                                          on row.Field<string>("answerId").ToString().Trim().ToLower() equals row2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                          where row2.Field<string>("metadataname").Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "perfilamiento"
+                                          select
+                                              row.Field<string>("answerid")).ToList();
+
+            // String List for non profiling answers
+            List<string> lst_noprofiling = new List<string>();
+
+            DataTable dtnoprofiling = new DataTable();
+            dtnoprofiling.Columns.Add("answerid");
+
+            List<string> lst_answerlist = (from row in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                           select
+                                               row.Field<string>("answerid")).ToList();
+
+            // Chitchat tag (chitchat value)
+            var query_chitchat = from row in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                 join row2 in dtAnswersMetadata.AsEnumerable()
+                                 on row.Field<string>("answerId").ToString().Trim().ToLower() equals row2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                 where row2.Field<string>("metadatavalue").Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "chitchat"
+                                 select
+                                     row;
+
+
+
+            List<string> lst_chitchat = (from row in dtAnswersId.AsEnumerable().DefaultIfEmpty()
+                                         join row2 in dtAnswersMetadata.AsEnumerable()
+                                         on row.Field<string>("answerId").ToString().Trim().ToLower() equals row2.Field<string>("AnswerId").ToString().Trim().ToLower()
+                                         where row2.Field<string>("metadatavalue").Replace(" ", string.Empty).Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u") == "chitchat"
+                                         select
+                                             row.Field<string>("answerid")).ToList();
+
+
+            foreach (string item in lst_answerlist)
+            {
+                if (!lst_profiling.Contains(item))
+                {
+                    lst_noprofiling.Add(item);
+                    dtnoprofiling.Rows.Add(item);
+                }
+            }
+
+            var query_noprofiling = from row in dtnoprofiling.AsEnumerable()
+                                    select row;
+
+            IEnumerable<DataRow> contenido = query_noprofiling.Except(query_chitchat);
+
+            // query answers from profiling tag  for structure metadata tags ( division,area_personal,perfil,ubicacion) hierarchy
+
+            // query division
+            var query_personaldivisionprofiling = from row in dtAnswersMetadata.AsEnumerable()
+                                                  join row2 in query_profiling
+                                                  on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                                  where row.Field<string>("metadataname").ToLower().Trim() == "division"
+                                                  && row.Field<string>("metadatavalue").Trim().ToLower() == user.Division
+                                                  select row;
+
+            var lst_personaldivisionprofiling = (from row in dtAnswersMetadata.AsEnumerable()
+                                                 join row2 in query_profiling
+                                                 on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                                 where row.Field<string>("metadataname").ToLower().Trim() == "division"
+                                                 && row.Field<string>("metadatavalue").Trim().ToLower() == user.Division
+                                                 select row.Field<string>("answerid")).ToList();
+
+            // query area_personal
+            var query_area_personal = from row in dtAnswersMetadata.AsEnumerable()
+                                      join row2 in query_personaldivisionprofiling
+                                      on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                      where row.Field<string>("metadataname").ToLower().Trim() == "area_personal"
+                                      && row.Field<string>("metadataname").ToLower().Trim() != "division"
+                                            && row.Field<string>("metadatavalue").Trim().ToLower() == user.PersonalArea
+                                      select row;
+
+            var lst_queryarea_personal = (from row in dtAnswersMetadata.AsEnumerable()
+                                          join row2 in query_personaldivisionprofiling
+                                          on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                          where row.Field<string>("metadataname").ToLower().Trim() == "area_personal"
+                                          && row.Field<string>("metadataname").ToLower().Trim() != "division"
+                                                && row.Field<string>("metadatavalue").Trim().ToLower() == user.PersonalArea
+                                          select row.Field<string>("answerid")).ToList();
+            // query aperfil
+            var query_perfil = from row in dtAnswersMetadata.AsEnumerable()
+                               join row2 in query_area_personal
+                               on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                               where row.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                               && row.Field<string>("metadataname").ToLower().Trim() != "division"
+                               && row.Field<string>("metadataname").ToLower().Trim() == "perfil"
+                                     && row.Field<string>("metadatavalue").Trim().ToLower() == user.Profile
+                               select row;
+
+            // query column metadata
+            var lst_columna = (from row in dtAnswersMetadata.AsEnumerable()
+                               join row2 in query_perfil
+                               on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                               join row3 in dtTranspose.AsEnumerable()
+                               on row.Field<string>("metadataname").Trim().ToLower() equals row3.Field<string>("metadataname")
+                               where row.Field<string>("metadatavalue").Trim().ToLower() == row3.Field<string>("metadatavalue")
+                               && row.Field<string>("metadataname").ToLower().Trim() != "division"
+                               && row.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                               && row.Field<string>("metadataname").ToLower().Trim() != "perfil"
+                               select row.Field<string>("answerid")
+                ).ToList();
+
+            var query_columna = from row in dtAnswersMetadata.AsEnumerable()
+                                join row2 in query_perfil
+                                on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                join row3 in dtTranspose.AsEnumerable()
+                                on row.Field<string>("metadataname").Trim().ToLower() equals row3.Field<string>("metadataname")
+                                where row.Field<string>("metadatavalue").Trim().ToLower() == row3.Field<string>("metadatavalue")
+                                && row.Field<string>("metadataname").ToLower().Trim() != "division"
+                                && row.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                                && row.Field<string>("metadataname").ToLower().Trim() != "perfil"
+                                select row;
+
+
+            var lst_columnafirstvalue = (from row in dtAnswersMetadata.AsEnumerable()
+                                         join row2 in query_perfil
+                                         on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                         join row3 in dtTranspose.AsEnumerable()
+                                         on row.Field<string>("metadataname").Trim().ToLower() equals row3.Field<string>("metadataname")
+                                         where row.Field<string>("metadatavalue").Trim().ToLower() == row3.Field<string>("metadatavalue")
+                                         && row.Field<string>("metadataname").ToLower().Trim() != "division"
+                                         && row.Field<string>("metadataname").ToLower().Trim() != "area_personal"
+                                         && row.Field<string>("metadataname").ToLower().Trim() != "perfil"
+                                         select row.Field<string>("answerid")).ToList();
+
+            // query column-ubication
+            var lst_columnaubicacion = (from row in query_columna
+                                        join row2 in dtAnswersMetadata.AsEnumerable()
+                                        on row.Field<string>("answerid") equals row2.Field<string>("answerid")
+                                        where row.Field<string>("metadataname") == "ubicacion"
+                                        && row.Field<string>("metadatavalue") == row.Field<string>("metadatavalue")
+                                        && row.Field<string>("answerid") == lst_columnafirstvalue[0].ToString()
+                                        select row.Field<string>("answerid")).ToList();
+
+
+
+            // Answer datatable with manual priority
+            DataTable dtAnswersQna = new DataTable();
+            dtAnswersQna.Columns.Add("answerid");
+            dtAnswersQna.Columns.Add("priority");
+            dtAnswersQna.Columns.Add("score");
+
+            // Add answers
+            // Priority 5 Profiling answer (perfilamiento-division-perfil-columna-ubicacion)
+            // Priority 4 Profiling answer (perfilamiento-division-perfil-columna)
+            // Priority 2 Content answer (no chitchat and no profiling)
+            // Priority 1 Chitchat
+
+            List<string> lst_score = new List<string>();
+            lst_columna = lst_columna.Except(lst_columnaubicacion).ToList();
+
+            foreach (string item in lst_columnaubicacion)
+            {
+                lst_score = (from row in dtAnswersId.AsEnumerable()
+                             where row.Field<string>("answerid") == item
+                             select row.Field<string>("score")).ToList();
+                dtAnswersQna.Rows.Add(item, 5, lst_score[0].ToString());
+            }
+            foreach (string item in lst_columna)
+            {
+                lst_score = (from row in dtAnswersId.AsEnumerable()
+                             where row.Field<string>("answerid") == item
+                             select row.Field<string>("score")).ToList();
+                dtAnswersQna.Rows.Add(item, 4, lst_score[0].ToString());
+
+            }
+
+            List<string> lstcontenido = (from row in contenido.AsEnumerable()
+                                         select row.Field<string>("answerid")).ToList();
+
+            foreach (string item in lstcontenido)
+            {
+                lst_score = (from row in dtAnswersId.AsEnumerable()
+                             where row.Field<string>("answerid") == item
+                             select row.Field<string>("score")).ToList();
+
+                dtAnswersQna.Rows.Add(item, 2, lst_score[0].ToString());
+            }
+
+            foreach (string item in lst_chitchat)
+            {
+                lst_score = (from row in dtAnswersId.AsEnumerable()
+                             where row.Field<string>("answerid") == item
+                             select row.Field<string>("score")).ToList();
+                dtAnswersQna.Rows.Add(item, 1, lst_score[0].ToString());
+            }
+
+            var respuestafinal = (from row in dtAnswersQna.AsEnumerable()
+                                  orderby row.Field<string>("priority") descending
+                                  select row.Field<string>("answerid")
+                                  ).Take(1).ToList();
+
+            return respuestafinal[0].ToString() ?? string.Empty;
+        }
+
     }
 }
