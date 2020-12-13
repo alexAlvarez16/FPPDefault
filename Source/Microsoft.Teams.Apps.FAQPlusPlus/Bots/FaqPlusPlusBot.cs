@@ -791,7 +791,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             // Perfilamiento
             string email = member.Email.ToLower().Trim();
 
-
             DataTable dtProfiling = this.Profiling(email);
 
             UserProfiling user = this.ProfilingStructure(email, dtProfiling, (string)JObject.Parse(turnContext.Activity.Entities[0].Properties.Root.ToString()).SelectToken("$.platform"));
@@ -1052,7 +1051,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
             // Perfilamiento
             string email = member.Email.ToLower().Trim();
-
 
             DataTable dtProfiling = this.Profiling(email);
 
@@ -2081,7 +2079,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 
                 // answer index in qnamaker object
                 int indice = 0;
-                if (finalAnswer.Length > 0)
+                if (finalAnswer!="-1" )
                 {
                     for (int i = 0; i < queryResult.Answers.Count; i++)
                     {
@@ -2405,8 +2403,15 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                                   select row.Field<string>("answerid")
                                   ).Take(1).ToList();
 
-            return respuestafinal[0].ToString() ?? string.Empty;
-        }
+            if (respuestafinal.Count == 0)
+            {
+                return "-1";
+            }
+            else
+            {
+                return respuestafinal[0].ToString(); 
+            }
+            }
 
     }
 }
