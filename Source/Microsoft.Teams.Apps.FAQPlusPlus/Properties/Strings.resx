@@ -676,4 +676,15 @@ Mis principales funciones son:\r\n\r\n
     <value>Opciones</value>
     <comment>Opciones para botones con comportamiento personalizado con valores de ticket embebidos (desarrollo)</comment>
   </data>
+  <data name="SmeShareFeedbackLink" xml:space="preserve">
+    <value>[**https://forms.office.com/Pages/ResponsePage.aspx?id=MHpazZpfC0GgN4bh4XpDMKIjPu2LS9VFppRdtq8ltwpURFBaMFlROEsyWlhQWjY3SDVaMkYyRk1PTS4u**](https://forms.office.com/Pages/ResponsePage.aspx?id=MHpazZpfC0GgN4bh4XpDMKIjPu2LS9VFppRdtq8ltwpURFBaMFlROEsyWlhQWjY3SDVaMkYyRk1PTS4u)</value>
+    <comment>Link de SmeShareFeedbackMessage</comment>
+  </data>
+  <data name="SmeShareFeedbackMessage" xml:space="preserve">
+    <value>Ahora que su solicitud ha sido atendida me gustaría que te tomaras un par de minutos para compartir retroalimentación del servicio brindado. Esto nos ayuda a mejorar nuestros servicios.\\n\\nTe pido por favor que entres al siguiente link y respondas la encuesta.\n
+{0}\n\n
+
+\\nGracias y nos vemos pronto.</value>
+    <comment>Mensaje de solicitud de retroalimentación.</comment>
+  </data>
 </root>

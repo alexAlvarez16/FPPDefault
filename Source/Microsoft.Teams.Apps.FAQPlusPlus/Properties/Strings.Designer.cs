@@ -988,6 +988,27 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Properties {
         }
         
         /// <summary>
+        ///   Busca una cadena traducida similar a [**https://forms.office.com/Pages/ResponsePage.aspx?id=MHpazZpfC0GgN4bh4XpDMKIjPu2LS9VFppRdtq8ltwpURFBaMFlROEsyWlhQWjY3SDVaMkYyRk1PTS4u**](https://forms.office.com/Pages/ResponsePage.aspx?id=MHpazZpfC0GgN4bh4XpDMKIjPu2LS9VFppRdtq8ltwpURFBaMFlROEsyWlhQWjY3SDVaMkYyRk1PTS4u).
+        /// </summary>
+        public static string SmeShareFeedbackLink {
+            get {
+                return ResourceManager.GetString("SmeShareFeedbackLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Busca una cadena traducida similar a Ahora que su solicitud ha sido atendida me gustaría que te tomaras un par de minutos para compartir retroalimentación del servicio brindado. Esto nos ayuda a mejorar nuestros servicios.\\n\\nTe pido por favor que entres al siguiente link y respondas la encuesta.\n
+        ///{0}\n\n
+        ///
+        ///\\nGracias y nos vemos pronto..
+        /// </summary>
+        public static string SmeShareFeedbackMessage {
+            get {
+                return ResourceManager.GetString("SmeShareFeedbackMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Busca una cadena traducida similar a Asignado a {0}.
         /// </summary>
         public static string SMETicketAssignedStatus {

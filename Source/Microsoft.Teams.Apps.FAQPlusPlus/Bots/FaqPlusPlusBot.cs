@@ -4,6 +4,7 @@
 
 namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
 {
+    using AdaptiveCards;
     using ChoETL;
     using Microsoft.ApplicationInsights;
     using Microsoft.ApplicationInsights.DataContracts;
@@ -1426,24 +1427,31 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             IMessageActivity userNotification = null;
 
 
-            smeNotification = string.Format(CultureInfo.InvariantCulture, Strings.SharefeedbackNotification, ticket.LastModifiedByName);
-            userNotification = MessageFactory.Attachment(ShareFeedbackCard.GetCard(ticket.RequesterGivenName));
+            
 
+            smeNotification = string.Format(CultureInfo.InvariantCulture, Strings.SharefeedbackNotification, ticket.LastModifiedByName);
+            userNotification = MessageFactory.Text(string.Format(Strings.SmeShareFeedbackMessage,Strings.SmeShareFeedbackLink).Replace("\\n","\n"));
+           // userNotification.Summary = txtReopenedTicketUserNotification;
 
             if (!string.IsNullOrEmpty(smeNotification))
             {
                 var smeResponse = await turnContext.SendActivityAsync(smeNotification).ConfigureAwait(false);
-                this.logger.LogInformation($"SME team notified of update to ticket {ticket.TicketId}, activityId = {smeResponse.Id}");
+                this.logger.LogInformation($"SME team notified of feedback request {ticket.TicketId}, activityId = {smeResponse.Id}");
             }
 
             if (userNotification != null)
             {
                 userNotification.Conversation = new ConversationAccount { Id = ticket.RequesterConversationId };
                 var userResponse = await turnContext.Adapter.SendActivitiesAsync(turnContext, new Activity[] { (Activity)userNotification }, cancellationToken).ConfigureAwait(false);
-                this.logger.LogInformation($"User notified of update to ticket {ticket.TicketId}, activityId = {userResponse.FirstOrDefault()?.Id}");
-            }
+             }
 
-
+            TelemetryClient telemetry = new TelemetryClient();
+            telemetry.TrackTrace("FeedbackRequest", 0, new Dictionary<string, string> {
+                            { "User", ticket.RequesterUserPrincipalName },
+                            { "Text", string.Format(Strings.SmeShareFeedbackMessage,Strings.SmeShareFeedbackLink).Replace("\\n","\n")},
+                            { "IDTicket", ticket.TicketId },
+                            {"AssignedToName",ticket.AssignedToName},
+            });
         }
 
         /// <summary>
