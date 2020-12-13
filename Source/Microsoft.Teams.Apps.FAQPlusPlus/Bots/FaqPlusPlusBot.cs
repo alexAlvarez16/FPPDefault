@@ -844,9 +844,10 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
             // Check if the incoming request is from SME for updating the ticket status.
             if (!string.IsNullOrEmpty(message.ReplyToId) && (message.Value != null) && ((JObject)message.Value).HasValues && !string.IsNullOrEmpty(((JObject)message.Value)["ticketId"]?.ToString()))
             {
-                if (((JObject)message.Value)["Action"].ToString() != null)
+                JToken token = ((JObject)message.Value)["action"];
+                if (token != null)
                 {
-                    string value = ((JObject)message.Value)["Action"].ToString();
+                    string value = ((JObject)message.Value)["action"].ToString();
                     if (value == ChangeTicketStatusPayload.Sharefeedback)
                     {
                         text = ChangeTicketStatusPayload.Sharefeedback;
@@ -856,6 +857,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                         text = ChangeStatus;
                     }
                 }
+
                 else
                 {
                     text = ChangeStatus;

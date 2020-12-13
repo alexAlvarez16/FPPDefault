@@ -952,6 +952,15 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Properties {
         }
         
         /// <summary>
+        ///   Busca una cadena traducida similar a Opciones.
+        /// </summary>
+        public static string SmeCardOptionButton {
+            get {
+                return ResourceManager.GetString("SmeCardOptionButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Busca una cadena traducida similar a Esta solicitud ha sido cerrada. Fue cerrada por {0}..
         /// </summary>
         public static string SMEClosedStatus {

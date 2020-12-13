@@ -80,7 +80,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
         {
             List<AdaptiveAction> actionsList = new List<AdaptiveAction>();
 
-            actionsList.Add(this.CreateChatWithUserAction());
 
             actionsList.Add(new AdaptiveShowCardAction
             {
@@ -98,12 +97,31 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                             Data = new ChangeTicketStatusPayload { TicketId = this.Ticket.TicketId },
                             Title = Strings.ExpertSubmitButonTitle,
                         },
-
                     },
                 },
 
+
+
             });
 
+            if (this.Ticket.Status == (int)TicketState.Closed)
+            {
+                actionsList.Add(new AdaptiveShowCardAction
+                {
+                    Title = Strings.SmeCardOptionButton,
+                    Card = new AdaptiveCard(new AdaptiveSchemaVersion(1, 0))
+                    {
+                        Actions = new List<AdaptiveAction>
+                {
+                    new AdaptiveSubmitAction
+                    {
+                        Title =  Strings.FeedbackRequestButton,
+                        Data =new ChangeTicketStatusPayload { TicketId = this.Ticket.TicketId , Action = ChangeTicketStatusPayload.Sharefeedback },
+                    },
+                },
+                    },
+                });
+            }
 
             if (!string.IsNullOrEmpty(this.Ticket.KnowledgeBaseAnswer))
             {
@@ -123,6 +141,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                     },
                 });
             }
+
+            actionsList.Add(this.CreateChatWithUserAction());
 
             return actionsList;
         }
@@ -188,6 +208,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
             return factList;
         }
 
+        
         /// <summary>
         /// Return the appropriate status choices based on the state and information in the ticket.
         /// </summary>
@@ -259,11 +280,6 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                         Title = Strings.ReopenAssignToMeActionChoiceTitle,
                         Value = ChangeTicketStatusPayload.AssignToSelfAction,
                     },
-                                     new AdaptiveChoice
-                        {
-                            Title = Strings.FeedbackRequestButton,
-                            Value = ChangeTicketStatusPayload.Sharefeedback,
-                        },
                 };
             }
 
