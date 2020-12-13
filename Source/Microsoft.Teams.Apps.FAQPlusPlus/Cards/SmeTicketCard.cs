@@ -104,8 +104,8 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
 
             });
 
-            if (this.Ticket.Status == (int)TicketState.Closed)
-            {
+            //if (this.Ticket.Status == (int)TicketState.Closed)
+            //{
                 actionsList.Add(new AdaptiveShowCardAction
                 {
                     Title = Strings.SmeCardOptionButton,
@@ -121,7 +121,7 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Cards
                 },
                     },
                 });
-            }
+            ////}
 
             if (!string.IsNullOrEmpty(this.Ticket.KnowledgeBaseAnswer))
             {
