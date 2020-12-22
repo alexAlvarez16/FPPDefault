@@ -1156,8 +1156,44 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                         }
 
                         await turnContext.SendActivityAsync(MessageFactory.Text(txtThankYouTextContentUser)).ConfigureAwait(false);
-                    }
 
+                        // Obtenemos la cadena de texto
+                        string value = string.Empty;
+                        foreach (object item in message.Value.ConvertToEnumerable())
+                        {
+                            value = item.ToString();
+                        }
+
+                        List<string> telemetryFeedbackValues = this.FeedbackRating(value);
+
+                        if (user.Division.Length > 0)
+                        {
+                            telemetry.TrackTrace("Feedback", 0, new Dictionary<string, string>
+                        {
+                                    { "Rate", telemetryFeedbackValues[0].ToString() },
+                                    { "Text", telemetryFeedbackValues[1].ToString() },
+                                    { "User", user.Email },
+                                    { "Division", user.Division },
+                                    { "Profile", user.Profile },
+                                    { "PersonalArea", user.PersonalArea },
+                                    { "Location", user.Ubication },
+                                    { "Platform", user.Platform },
+                        });
+                        }
+                        else
+                        {
+                            telemetry.TrackTrace("Feedback", 0, new Dictionary<string, string>
+                        {
+                                    { "Rate", telemetryFeedbackValues[0].ToString() },
+                                    { "Text", telemetryFeedbackValues[1].ToString() },
+                                    { "User", user.Email },
+                                    { "Division", user.Division },
+                                    { "Profile", user.Profile },
+                                    { "Location", user.Ubication },
+                                    { "Platform", user.Platform },
+                        });
+                        }
+                    }
                     break;
 
                 default:
@@ -1200,15 +1236,47 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
         }
 
 
+        private List<string> FeedbackRating(string value)
+        {
+            List<string> lst = new List<string>();
 
-        /// <summary>
-        /// Handle adaptive card submit in channel.
-        /// Updates the ticket status based on the user submission.
-        /// </summary>
-        /// <param name="message">A message in a conversation.</param>
-        /// <param name="turnContext">Context object containing information cached for a single turn of conversation with a user.</param>
-        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
-        /// <returns>A task that represents the work queued to execute.</returns>
+            // Obtenemos el valor de texto y su puntuacion
+            // TO DO: Revisar las palabras clave Rating y Description para añadir dinamismo al codigo
+
+            int firstindex = value.IndexOf("Rating") + 10;
+            string swapvalue = value.Substring(firstindex);
+            int secondindex = swapvalue.IndexOf("\r\n") - 1;
+
+            string rating = swapvalue.Substring(0, secondindex).Replace("\\", "").Replace("\"", "").Trim().ToLower();
+
+
+            firstindex = value.IndexOf("Description") + 15;
+            swapvalue = value.Substring(firstindex);
+            secondindex = swapvalue.IndexOf("\r\n") - 1;
+            string usertext = swapvalue.Substring(0, secondindex).Replace("\\", "").Replace("\"", "").Trim().ToLower();
+
+            // TO DO: Revisar las constantes para añadir dinamismo al codigo
+            switch (rating)
+            {
+                case "helpful":
+                    rating = Strings.HelpfulRatingText;
+                    break;
+                case "nothelpful":
+                    rating = Strings.NotHelpfulRatingText;
+                    break;
+                case "needsimprovement":
+                    rating = Strings.NeedsImprovementRatingText;
+                    break;
+            }
+
+            lst.Add(rating);
+            if (usertext.Length == 0)
+            {
+                usertext = "na";
+            }
+            lst.Add(usertext);
+            return lst;
+        }
 
 
         /// <summary>
