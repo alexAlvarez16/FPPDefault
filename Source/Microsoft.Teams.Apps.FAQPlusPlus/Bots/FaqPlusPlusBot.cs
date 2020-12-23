@@ -1186,11 +1186,11 @@ namespace Microsoft.Teams.Apps.FAQPlusPlus.Bots
                         {
                                     { "Rate", telemetryFeedbackValues[0].ToString() },
                                     { "Text", telemetryFeedbackValues[1].ToString() },
-                                    { "User", user.Email },
-                                    { "Division", user.Division },
-                                    { "Profile", user.Profile },
-                                    { "Location", user.Ubication },
-                                    { "Platform", user.Platform },
+                                    { "User", member.Email.ToLower() },
+                                    { "Division", "na" },
+                                    { "Profile", "na" },
+                                    { "Location","na" },
+                                    { "Platform", "na"},
                         });
                         }
                     }
